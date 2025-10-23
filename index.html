@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redis Data Structure Playground</title>
+    <title>Redis Data Structure Playground — Patched</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes fadeIn {
@@ -33,32 +33,21 @@
         .snapshot-flash { animation: snapshot 0.6s ease-out; }
         .aof-line { animation: aofWrite 0.8s ease-out forwards; }
         
-        .list-item {
-            transition: all 0.3s ease;
-        }
-        .hash-row {
-            transition: all 0.3s ease;
-        }
-        .set-node {
-            transition: all 0.3s ease;
-        }
-        .zset-bar {
-            transition: all 0.5s ease;
-        }
+        .list-item { transition: all 0.3s ease; }
+        .hash-row { transition: all 0.3s ease; }
+        .set-node { transition: all 0.3s ease; }
+        .zset-bar { transition: all 0.5s ease; }
         
         /* Custom scrollbar */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #1f2937;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #4b5563;
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #6b7280;
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1f2937; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+        /* Respect user's reduced-motion preference */
+        @media (prefers-reduced-motion: reduce) {
+            .fade-in, .slide-in, .snapshot-flash, .aof-line { animation: none !important; }
+            .list-item, .hash-row, .set-node, .zset-bar { transition: none !important; }
         }
     </style>
 </head>
@@ -85,18 +74,23 @@
                     </div>
                 </div>
                 <div>
-                    <div class="text-sm text-gray-400 mb-1">Operations/sec</div>
-                    <div id="opsCounter" class="text-2xl font-bold text-blue-400">0</div>
+                    <div class="text-sm text-gray-400 mb-1">Operations/sec (10s avg)</div>
+                    <div id="opsCounter" class="text-2xl font-bold text-blue-400">0.0</div>
                 </div>
             </div>
             
-            <div class="flex gap-2">
+            <div class="flex gap-2 items-center">
                 <button id="rdbToggle" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors border-2 border-transparent">
                     <div class="flex items-center gap-2">
                         <div class="w-3 h-3 rounded-full bg-gray-500" id="rdbIndicator"></div>
                         <span>RDB Snapshots</span>
                     </div>
                 </button>
+                <div class="flex items-center gap-2">
+                    <label for="rdbIntervalInput" class="text-xs text-gray-400">Every</label>
+                    <input id="rdbIntervalInput" type="number" min="1" value="10" class="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-orange-500" title="Snapshot after this many write ops">
+                    <span class="text-xs text-gray-400">ops</span>
+                </div>
                 <button id="aofToggle" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors border-2 border-transparent">
                     <div class="flex items-center gap-2">
                         <div class="w-3 h-3 rounded-full bg-gray-500" id="aofIndicator"></div>
@@ -115,19 +109,25 @@
                     <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
                         <span class="text-red-500">⚡</span> Command Terminal
                     </h2>
-                    <div class="flex gap-2 mb-4">
+                    <div class="flex gap-2 mb-2">
                         <input 
                             type="text" 
                             id="commandInput" 
                             placeholder="Enter Redis command (e.g., SET key value, LPUSH mylist item)"
                             class="flex-1 bg-gray-900 border border-gray-700 rounded px-4 py-2 focus:outline-none focus:border-red-500 font-mono text-sm"
+                            list="commandList"
+                            autocomplete="off"
                         />
                         <button id="executeBtn" class="px-6 py-2 bg-red-600 hover:bg-red-700 rounded font-semibold transition-colors">
                             Execute
                         </button>
                     </div>
+                    <div class="text-xs text-gray-500 mb-3">
+                        Tips: ↑/↓ for history · Tab to autocomplete command · Type <span class="font-mono">HELP</span> for reference · <span class="font-mono">CLEAR</span> clears the terminal
+                    </div>
+                    <datalist id="commandList"></datalist>
                     <div id="output" class="bg-gray-900 rounded p-3 min-h-[200px] max-h-[400px] overflow-y-auto font-mono text-sm custom-scrollbar">
-                        <div class="text-gray-500">redis> Ready for commands...</div>
+                        <div class="text-gray-500">redis&gt; Ready for commands...</div>
                     </div>
                 </div>
 
@@ -178,8 +178,10 @@
                         <div class="bg-gray-900 rounded p-2"><span class="text-green-400 font-mono">DEL key [key ...]</span><span class="text-gray-400"> - Delete keys</span></div>
                         <div class="bg-gray-900 rounded p-2"><span class="text-green-400 font-mono">EXPIRE key seconds</span><span class="text-gray-400"> - Set TTL</span></div>
                         <div class="bg-gray-900 rounded p-2"><span class="text-green-400 font-mono">TTL key</span><span class="text-gray-400"> - Get TTL</span></div>
+                        <div class="bg-gray-900 rounded p-2"><span class="text-green-400 font-mono">PERSIST key</span><span class="text-gray-400"> - Remove TTL</span></div>
                         <div class="bg-gray-900 rounded p-2"><span class="text-green-400 font-mono">RENAME oldkey newkey</span><span class="text-gray-400"> - Rename key</span></div>
-                        <div class="bg-gray-900 rounded p-2 mb-2"><span class="text-green-400 font-mono">KEYS pattern</span><span class="text-gray-400"> - Find keys</span></div>
+                        <div class="bg-gray-900 rounded p-2"><span class="text-green-400 font-mono">TYPE key</span><span class="text-gray-400"> - Show key type</span></div>
+                        <div class="bg-gray-900 rounded p-2 mb-2"><span class="text-green-400 font-mono">KEYS pattern / SCAN cursor [MATCH p] [COUNT n]</span><span class="text-gray-400"> - Find keys (prefer SCAN)</span></div>
 
                         <div class="text-xs uppercase tracking-wider text-gray-400 mt-3">Lists</div>
                         <div class="bg-gray-900 rounded p-2"><span class="text-green-400 font-mono">LPUSH key value [value ...]</span><span class="text-gray-400"> - Push left</span></div>
@@ -219,8 +221,10 @@
                         <div class="bg-gray-900 rounded p-2 mb-2"><span class="text-green-400 font-mono">ZCARD key</span><span class="text-gray-400"> - Member count</span></div>
 
                         <div class="text-xs uppercase tracking-wider text-gray-400 mt-3">Other</div>
+                        <div class="bg-gray-900 rounded p-2"><span class="text-green-400 font-mono">EXISTS key [key ...]</span><span class="text-gray-400"> - Count existing</span></div>
                         <div class="bg-gray-900 rounded p-2"><span class="text-green-400 font-mono">FLUSHALL</span><span class="text-gray-400"> - Remove all keys</span></div>
-                        <div class="bg-gray-900 rounded p-2"><span class="text-green-400 font-mono">HELP</span><span class="text-gray-400"> - Show this list</span></div>
+                        <div class="bg-gray-900 rounded p-2"><span class="text-green-400 font-mono">CLEAR</span><span class="text-gray-400"> - Clear terminal output</span></div>
+                        <div class="bg-gray-900 rounded p-2"><span class="text-green-400 font-mono">HELP [COMMAND]</span><span class="text-gray-400"> - Show this list or command-specific help</span></div>
                     </div>
                 </div>
             </div>
@@ -291,15 +295,13 @@
                         <div class="bg-gray-900 rounded p-3">
                             <div class="text-sm font-semibold mb-2 text-orange-400">RDB Snapshots</div>
                             <div id="rdbStatus" class="text-xs text-gray-500 mb-2">Disabled</div>
-                            <div id="rdbVisual" class="space-y-1 min-h-[80px]">
-                            </div>
+                            <div id="rdbVisual" class="space-y-1 min-h-[80px]"></div>
                         </div>
                         <!-- AOF Panel -->
                         <div class="bg-gray-900 rounded p-3">
                             <div class="text-sm font-semibold mb-2 text-blue-400">AOF Log</div>
                             <div id="aofStatus" class="text-xs text-gray-500 mb-2">Disabled</div>
-                            <div id="aofVisual" class="font-mono text-xs space-y-1 max-h-[80px] overflow-hidden">
-                            </div>
+                            <div id="aofVisual" class="font-mono text-xs space-y-1 max-h-[80px] overflow-hidden"></div>
                         </div>
                     </div>
                 </div>
@@ -322,9 +324,17 @@
         let currentTab = 'string';
         let rdbEnabled = false;
         let aofEnabled = false;
+        let rdbInterval = 10;            // snapshot after this many *write* ops
+        let writesSinceLastSnapshot = 0; // counts write ops
         let memoryUsed = 0;
-        let operationCount = 0;
-        let lastOpTime = Date.now();
+
+        // Ops/sec sliding window (10 seconds)
+        const opsTimestamps = [];
+        const OPS_WINDOW_MS = 10000;
+
+        // History + autocomplete
+        const cmdHistory = [];
+        let historyIndex = -1;
 
         // Command specs for contextual help on invalid usage
         const COMMAND_SPECS = {
@@ -353,6 +363,21 @@
                 purpose: 'Delete one or more keys, ignoring missing keys.',
                 formats: ['DEL key [key ...]'],
                 examples: ['DEL user:1001']
+            },
+            EXISTS: {
+                purpose: 'Return the number of keys that exist.',
+                formats: ['EXISTS key [key ...]'],
+                examples: ['EXISTS foo bar baz']
+            },
+            TYPE: {
+                purpose: 'Report the type stored at key.',
+                formats: ['TYPE key'],
+                examples: ['TYPE mykey']
+            },
+            PERSIST: {
+                purpose: 'Remove the TTL from a key.',
+                formats: ['PERSIST key'],
+                examples: ['PERSIST session:abc123']
             },
             // List commands
             LPUSH: {
@@ -529,50 +554,46 @@
                 formats: ['KEYS pattern'],
                 examples: ['KEYS fruit:*']
             },
+            SCAN: {
+                purpose: 'Incrementally iterate keys.',
+                formats: ['SCAN cursor [MATCH pattern] [COUNT count]'],
+                examples: ['SCAN 0 MATCH user:* COUNT 5']
+            },
             HELP: {
                 purpose: 'Show overview of available commands.',
-                formats: ['HELP'],
+                formats: ['HELP', 'HELP COMMAND'],
                 examples: []
             },
             FLUSHALL: {
                 purpose: 'Remove all keys from the database.',
                 formats: ['FLUSHALL'],
                 examples: []
+            },
+            CLEAR: {
+                purpose: 'Clear the terminal output (playground-only helper).',
+                formats: ['CLEAR'],
+                examples: []
             }
         };
+
+        // Preload datalist options
+        (function initCommandDatalist() {
+            const dl = document.getElementById('commandList');
+            Object.keys(COMMAND_SPECS).sort().forEach(cmd => {
+                const opt = document.createElement('option');
+                opt.value = cmd;
+                dl.appendChild(opt);
+            });
+        })();
 
         // Memory calculation (approximate)
         function calculateMemory() {
             let total = 0;
-            
-            // Strings: key + value
-            Object.entries(redisStore.strings).forEach(([k, v]) => {
-                total += k.length + String(v).length;
-            });
-            
-            // Lists
-            Object.entries(redisStore.lists).forEach(([k, v]) => {
-                total += k.length + v.reduce((sum, item) => sum + String(item).length, 0);
-            });
-            
-            // Sets
-            Object.entries(redisStore.sets).forEach(([k, v]) => {
-                total += k.length + Array.from(v).reduce((sum, item) => sum + String(item).length, 0);
-            });
-            
-            // Hashes
-            Object.entries(redisStore.hashes).forEach(([k, v]) => {
-                total += k.length;
-                Object.entries(v).forEach(([field, val]) => {
-                    total += field.length + String(val).length;
-                });
-            });
-            
-            // Sorted Sets
-            Object.entries(redisStore.zsets).forEach(([k, v]) => {
-                total += k.length + v.reduce((sum, item) => sum + String(item.member).length + 8, 0);
-            });
-            
+            Object.entries(redisStore.strings).forEach(([k, v]) => { total += k.length + String(v).length; });
+            Object.entries(redisStore.lists).forEach(([k, v]) => { total += k.length + v.reduce((s, it) => s + String(it).length, 0); });
+            Object.entries(redisStore.sets).forEach(([k, v]) => { total += k.length + Array.from(v).reduce((s, it) => s + String(it).length, 0); });
+            Object.entries(redisStore.hashes).forEach(([k, v]) => { total += k.length; Object.entries(v).forEach(([f, val]) => { total += f.length + String(val).length; }); });
+            Object.entries(redisStore.zsets).forEach(([k, v]) => { total += k.length + v.reduce((s, it) => s + String(it.member).length + 8, 0); });
             return total;
         }
 
@@ -580,36 +601,26 @@
             memoryUsed = calculateMemory();
             const maxMemory = 1000 * 1024; // 1000 KB
             const percentage = Math.min((memoryUsed / maxMemory) * 100, 100);
-            
             document.getElementById('memoryBar').style.width = percentage + '%';
-            document.getElementById('memoryText').textContent = 
-                `${(memoryUsed / 1024).toFixed(2)} KB / ${(maxMemory / 1024).toFixed(0)} KB`;
-            
-            // Change color based on usage
+            document.getElementById('memoryText').textContent = `${(memoryUsed / 1024).toFixed(2)} KB / ${(maxMemory / 1024).toFixed(0)} KB`;
             const bar = document.getElementById('memoryBar');
-            if (percentage > 80) {
-                bar.className = 'bg-gradient-to-r from-red-500 to-red-600 h-full transition-all duration-500';
-            } else if (percentage > 50) {
-                bar.className = 'bg-gradient-to-r from-yellow-500 to-orange-500 h-full transition-all duration-500';
-            } else {
-                bar.className = 'bg-gradient-to-r from-green-500 to-yellow-500 h-full transition-all duration-500';
-            }
+            if (percentage > 80) { bar.className = 'bg-gradient-to-r from-red-500 to-red-600 h-full transition-all duration-500'; }
+            else if (percentage > 50) { bar.className = 'bg-gradient-to-r from-yellow-500 to-orange-500 h-full transition-all duration-500'; }
+            else { bar.className = 'bg-gradient-to-r from-green-500 to-yellow-500 h-full transition-all duration-500'; }
         }
 
         function updateOpsCounter() {
-            operationCount++;
             const now = Date.now();
-            const elapsed = (now - lastOpTime) / 1000;
-            const opsPerSec = elapsed > 0 ? Math.round(1 / elapsed) : 0;
-            document.getElementById('opsCounter').textContent = opsPerSec;
-            lastOpTime = now;
-            
-            // Reset after 2 seconds
-            setTimeout(() => {
-                document.getElementById('opsCounter').textContent = '0';
-            }, 2000);
+            opsTimestamps.push(now);
+            // remove timestamps older than window
+            while (opsTimestamps.length && (now - opsTimestamps[0]) > OPS_WINDOW_MS) opsTimestamps.shift();
+            const windowMs = opsTimestamps.length ? (now - opsTimestamps[0]) : 1;
+            const opsPerSec = windowMs > 0 ? (opsTimestamps.length / (windowMs / 1000)) : 0;
+            document.getElementById('opsCounter').textContent = opsPerSec.toFixed(1);
         }
+        setInterval(updateOpsCounter, 1000); // refresh display even when idle
 
+        // Key helpers
         function keyExistsAnywhere(key) {
             return redisStore.strings[key] !== undefined ||
                 redisStore.lists[key] !== undefined ||
@@ -618,66 +629,42 @@
                 redisStore.zsets[key] !== undefined;
         }
 
+        function keyType(key) {
+            if (redisStore.strings[key] !== undefined) return 'string';
+            if (redisStore.lists[key]   !== undefined) return 'list';
+            if (redisStore.sets[key]    !== undefined) return 'set';
+            if (redisStore.hashes[key]  !== undefined) return 'hash';
+            if (redisStore.zsets[key]   !== undefined) return 'zset';
+            return null;
+        }
+
+        function ensureStructure(key, expected) {
+            const currentType = keyType(key);
+            if (currentType && currentType !== expected) {
+                removeKeyFromAllStructures(key);
+            }
+        }
+
         function removeKeyFromAllStructures(key) {
             let removed = false;
-            if (redisStore.strings[key] !== undefined) {
-                delete redisStore.strings[key];
-                removed = true;
-            }
-            if (redisStore.lists[key] !== undefined) {
-                delete redisStore.lists[key];
-                removed = true;
-            }
-            if (redisStore.sets[key] !== undefined) {
-                delete redisStore.sets[key];
-                removed = true;
-            }
-            if (redisStore.hashes[key] !== undefined) {
-                delete redisStore.hashes[key];
-                removed = true;
-            }
-            if (redisStore.zsets[key] !== undefined) {
-                delete redisStore.zsets[key];
-                removed = true;
-            }
-            if (ttlStore[key] !== undefined) {
-                delete ttlStore[key];
-            }
+            if (redisStore.strings[key] !== undefined) { delete redisStore.strings[key]; removed = true; }
+            if (redisStore.lists[key] !== undefined)   { delete redisStore.lists[key];   removed = true; }
+            if (redisStore.sets[key] !== undefined)    { delete redisStore.sets[key];    removed = true; }
+            if (redisStore.hashes[key] !== undefined)  { delete redisStore.hashes[key];  removed = true; }
+            if (redisStore.zsets[key] !== undefined)   { delete redisStore.zsets[key];   removed = true; }
+            if (ttlStore[key] !== undefined)           { delete ttlStore[key]; }
             return removed;
         }
 
         function renameKeyAcrossStructures(oldKey, newKey) {
-            if (!keyExistsAnywhere(oldKey)) {
-                return false;
-            }
-
+            if (!keyExistsAnywhere(oldKey)) return false;
             removeKeyFromAllStructures(newKey);
-
-            if (redisStore.strings[oldKey] !== undefined) {
-                redisStore.strings[newKey] = redisStore.strings[oldKey];
-                delete redisStore.strings[oldKey];
-            }
-            if (redisStore.lists[oldKey] !== undefined) {
-                redisStore.lists[newKey] = redisStore.lists[oldKey];
-                delete redisStore.lists[oldKey];
-            }
-            if (redisStore.sets[oldKey] !== undefined) {
-                redisStore.sets[newKey] = redisStore.sets[oldKey];
-                delete redisStore.sets[oldKey];
-            }
-            if (redisStore.hashes[oldKey] !== undefined) {
-                redisStore.hashes[newKey] = redisStore.hashes[oldKey];
-                delete redisStore.hashes[oldKey];
-            }
-            if (redisStore.zsets[oldKey] !== undefined) {
-                redisStore.zsets[newKey] = redisStore.zsets[oldKey];
-                delete redisStore.zsets[oldKey];
-            }
-            if (ttlStore[oldKey] !== undefined) {
-                ttlStore[newKey] = ttlStore[oldKey];
-                delete ttlStore[oldKey];
-            }
-
+            if (redisStore.strings[oldKey] !== undefined) { redisStore.strings[newKey] = redisStore.strings[oldKey]; delete redisStore.strings[oldKey]; }
+            if (redisStore.lists[oldKey]   !== undefined) { redisStore.lists[newKey]   = redisStore.lists[oldKey];   delete redisStore.lists[oldKey]; }
+            if (redisStore.sets[oldKey]    !== undefined) { redisStore.sets[newKey]    = redisStore.sets[oldKey];    delete redisStore.sets[oldKey]; }
+            if (redisStore.hashes[oldKey]  !== undefined) { redisStore.hashes[newKey]  = redisStore.hashes[oldKey];  delete redisStore.hashes[oldKey]; }
+            if (redisStore.zsets[oldKey]   !== undefined) { redisStore.zsets[newKey]   = redisStore.zsets[oldKey];   delete redisStore.zsets[oldKey]; }
+            if (ttlStore[oldKey] !== undefined) { ttlStore[newKey] = ttlStore[oldKey]; delete ttlStore[oldKey]; }
             return true;
         }
 
@@ -692,9 +679,7 @@
         }
 
         function formatIndexed(values, emptyLabel = '(empty list or set)') {
-            if (!values.length) {
-                return [emptyLabel];
-            }
+            if (!values.length) return [emptyLabel];
             return values.map((value, index) => `${index + 1}) ${value}`);
         }
 
@@ -709,7 +694,7 @@
             }
         }
 
-        // Command Parser
+        // Parser
         function tokenize(input) {
             const tokens = [];
             let current = '';
@@ -718,75 +703,59 @@
 
             for (let i = 0; i < input.length; i++) {
                 const char = input[i];
-
                 if (inQuotes) {
-                    if (char === '\\' && i + 1 < input.length) {
-                        current += input[i + 1];
-                        i++;
-                    } else if (char === quoteChar) {
-                        inQuotes = false;
-                    } else {
-                        current += char;
-                    }
+                    if (char === '\\' && i + 1 < input.length) { current += input[i + 1]; i++; }
+                    else if (char === quoteChar) { inQuotes = false; }
+                    else { current += char; }
                 } else {
                     if (char === '"' || char === "'") {
-                        inQuotes = true;
-                        quoteChar = char;
-                        if (current.length > 0) {
-                            tokens.push(current);
-                            current = '';
-                        }
+                        inQuotes = true; quoteChar = char;
+                        if (current.length > 0) { tokens.push(current); current = ''; }
                     } else if (/\s/.test(char)) {
-                        if (current.length > 0) {
-                            tokens.push(current);
-                            current = '';
-                        }
-                    } else {
-                        current += char;
-                    }
+                        if (current.length > 0) { tokens.push(current); current = ''; }
+                    } else { current += char; }
                 }
             }
-
-            if (inQuotes) {
-                throw new Error('Unterminated quoted string');
-            }
-
-            if (current.length > 0) {
-                tokens.push(current);
-            }
-
+            if (inQuotes) throw new Error('Unterminated quoted string');
+            if (current.length > 0) tokens.push(current);
             return tokens;
         }
 
         function parseCommand(input) {
             const trimmed = input.trim();
-            if (!trimmed) {
-                return { command: '', args: [] };
-            }
-
+            if (!trimmed) return { command: '', args: [] };
             const tokens = tokenize(trimmed);
-            if (tokens.length === 0) {
-                return { command: '', args: [] };
-            }
-
+            if (tokens.length === 0) return { command: '', args: [] };
             const command = tokens[0].toUpperCase();
             const args = tokens.slice(1);
             return { command, args };
         }
 
-        // Command Executor
+        // Write commands set for AOF + RDB snapshot triggers
+        const WRITE_CMDS = new Set([
+            'SET','MSET','DEL','LPUSH','RPUSH','LPOP','RPOP','SADD','SREM','HSET','HMSET',
+            'HDEL','HINCRBY','HINCRBYFLOAT','ZADD','ZREM','EXPIRE','RENAME','FLUSHALL','PERSIST'
+        ]);
+
+        // Executor
         function executeCommand(input) {
             let result = '';
+            let parsed;
             try {
-                const { command, args } = parseCommand(input);
+                parsed = parseCommand(input);
+                const { command, args } = parsed;
                 if (!command) return;
+
+                // Playground helper
+                if (command === 'CLEAR') { clearOutput(); return; }
+
                 switch (command) {
                     // String commands
                     case 'SET': {
                         if (args.length < 2) throw new Error('SET requires key and value');
                         const key = args[0];
                         const value = args.slice(1).join(' ');
-                        removeKeyFromAllStructures(key);
+                        removeKeyFromAllStructures(key); // also clears TTL -> Redis behavior
                         redisStore.strings[key] = value;
                         result = 'OK';
                         renderStrings();
@@ -806,7 +775,8 @@
                     }
                     case 'GET': {
                         if (args.length < 1) throw new Error('GET requires key');
-                        result = redisStore.strings[args[0]] !== undefined ? redisStore.strings[args[0]] : '(nil)';
+                        const key = args[0];
+                        result = redisStore.strings[key] !== undefined ? redisStore.strings[key] : '(nil)';
                         break;
                     }
                     case 'MGET': {
@@ -815,10 +785,29 @@
                         result = formatIndexed(values);
                         break;
                     }
+                    case 'EXISTS': {
+                        if (args.length < 1) throw new Error('EXISTS requires at least one key');
+                        let count = 0; args.forEach(k => { if (keyExistsAnywhere(k)) count++; });
+                        result = `(integer) ${count}`; break;
+                    }
+                    case 'TYPE': {
+                        if (args.length < 1) throw new Error('TYPE requires key');
+                        const t = keyType(args[0]);
+                        result = t ? t : 'none'; break;
+                    }
+                    case 'PERSIST': {
+                        if (args.length < 1) throw new Error('PERSIST requires key');
+                        const key = args[0];
+                        if (!keyExistsAnywhere(key)) { result = '(integer) 0'; }
+                        else if (ttlStore[key] !== undefined) { delete ttlStore[key]; result = '(integer) 1'; renderAll(); }
+                        else { result = '(integer) 0'; }
+                        break;
+                    }
                     // List commands
                     case 'LPUSH': {
                         if (args.length < 2) throw new Error('LPUSH requires key and value');
                         const key = args[0];
+                        ensureStructure(key, 'list');
                         const values = args.slice(1);
                         if (!redisStore.lists[key]) redisStore.lists[key] = [];
                         values.forEach(v => redisStore.lists[key].unshift(v));
@@ -829,6 +818,7 @@
                     case 'RPUSH': {
                         if (args.length < 2) throw new Error('RPUSH requires key and value');
                         const key = args[0];
+                        ensureStructure(key, 'list');
                         const values = args.slice(1);
                         if (!redisStore.lists[key]) redisStore.lists[key] = [];
                         values.forEach(v => redisStore.lists[key].push(v));
@@ -840,15 +830,11 @@
                         if (args.length < 1) throw new Error('LPOP requires key');
                         const key = args[0];
                         const list = redisStore.lists[key];
-                        if (!list || list.length === 0) {
-                            result = '(nil)';
-                        } else {
+                        if (!list || list.length === 0) { result = '(nil)'; }
+                        else {
                             const value = list.shift();
                             result = value !== undefined ? value : '(nil)';
-                            if (list.length === 0) {
-                                delete redisStore.lists[key];
-                                delete ttlStore[key];
-                            }
+                            if (list.length === 0) { delete redisStore.lists[key]; delete ttlStore[key]; }
                             renderLists();
                         }
                         break;
@@ -857,15 +843,11 @@
                         if (args.length < 1) throw new Error('RPOP requires key');
                         const key = args[0];
                         const list = redisStore.lists[key];
-                        if (!list || list.length === 0) {
-                            result = '(nil)';
-                        } else {
+                        if (!list || list.length === 0) { result = '(nil)'; }
+                        else {
                             const value = list.pop();
                             result = value !== undefined ? value : '(nil)';
-                            if (list.length === 0) {
-                                delete redisStore.lists[key];
-                                delete ttlStore[key];
-                            }
+                            if (list.length === 0) { delete redisStore.lists[key]; delete ttlStore[key]; }
                             renderLists();
                         }
                         break;
@@ -892,160 +874,139 @@
                     case 'SADD': {
                         if (args.length < 2) throw new Error('SADD requires key and member');
                         const key = args[0];
+                        ensureStructure(key, 'set');
                         const members = args.slice(1);
                         if (!redisStore.sets[key]) redisStore.sets[key] = new Set();
                         let added = 0;
-                        members.forEach(m => {
-                            if (!redisStore.sets[key].has(m)) added++;
-                            redisStore.sets[key].add(m);
-                        });
-                        result = `(integer) ${added}`;
-                        renderSets();
-                        break;
+                        members.forEach(m => { if (!redisStore.sets[key].has(m)) added++; redisStore.sets[key].add(m); });
+                        result = `(integer) ${added}`; renderSets(); break;
                     }
                     case 'SREM': {
                         if (args.length < 2) throw new Error('SREM requires key and member');
                         const key = args[0];
                         const members = args.slice(1);
                         const set = redisStore.sets[key];
-                        if (!set) {
-                            result = '(integer) 0';
-                        } else {
+                        if (!set) { result = '(integer) 0'; }
+                        else {
                             let removed = 0;
                             members.forEach(m => { if (set.delete(m)) removed++; });
                             if (set.size === 0) { delete redisStore.sets[key]; delete ttlStore[key]; }
-                            result = `(integer) ${removed}`;
-                            renderSets();
+                            result = `(integer) ${removed}`; renderSets();
                         }
                         break;
                     }
                     case 'SISMEMBER': {
                         if (args.length < 2) throw new Error('SISMEMBER requires key and member');
-                        const set = redisStore.sets[args[0]];
-                        result = `(integer) ${set && set.has(args[1]) ? 1 : 0}`;
-                        break;
+                        const key = args[0];
+                        const set = redisStore.sets[key];
+                        result = `(integer) ${set && set.has(args[1]) ? 1 : 0}`; break;
                     }
                     case 'SINTER': {
                         if (args.length < 1) throw new Error('SINTER requires at least one key');
                         const sets = args.map(k => new Set(redisStore.sets[k] ? Array.from(redisStore.sets[k]) : []));
                         const inter = sets.length ? Array.from(sets[0]).filter(v => sets.every(s => s.has(v))) : [];
-                        result = formatIndexed(inter.map(m => `"${m}"`));
-                        break;
+                        result = formatIndexed(inter.map(m => `"${m}"`)); break;
                     }
                     case 'SUNION': {
                         if (args.length < 1) throw new Error('SUNION requires at least one key');
                         const union = new Set();
                         args.forEach(k => { const s = redisStore.sets[k]; if (s) s.forEach(v => union.add(v)); });
-                        result = formatIndexed(Array.from(union).map(m => `"${m}"`));
-                        break;
+                        result = formatIndexed(Array.from(union).map(m => `"${m}"`)); break;
                     }
                     case 'SDIFF': {
                         if (args.length < 1) throw new Error('SDIFF requires at least one key');
                         const base = redisStore.sets[args[0]];
                         const diff = base ? Array.from(base).filter(v => !args.slice(1).some(k => redisStore.sets[k]?.has(v))) : [];
-                        result = formatIndexed(diff.map(m => `"${m}"`));
-                        break;
+                        result = formatIndexed(diff.map(m => `"${m}"`)); break;
                     }
                     case 'SCARD': {
-                        const set = redisStore.sets[args[0]];
-                        result = `(integer) ${set ? set.size : 0}`;
-                        break;
+                        const key = args[0];
+                        const set = redisStore.sets[key];
+                        result = `(integer) ${set ? set.size : 0}`; break;
                     }
                     case 'SMEMBERS': {
-                        const set = redisStore.sets[args[0]];
-                        result = formatIndexed(set ? Array.from(set).map(m => `"${m}"`) : []);
-                        break;
+                        const key = args[0];
+                        const set = redisStore.sets[key];
+                        result = formatIndexed(set ? Array.from(set).map(m => `"${m}"`) : []); break;
                     }
                     // Hash commands
                     case 'HSET': {
                         if (args.length < 3 || (args.length - 1) % 2 !== 0) throw new Error('HSET requires key and field value pairs');
                         const key = args[0];
+                        ensureStructure(key, 'hash');
                         if (!redisStore.hashes[key]) redisStore.hashes[key] = {};
                         let added = 0;
-                        for (let i = 1; i < args.length; i += 2) {
-                            const f = args[i]; const v = args[i + 1];
-                            if (redisStore.hashes[key][f] === undefined) added++;
-                            redisStore.hashes[key][f] = v;
-                        }
-                        result = `(integer) ${added}`;
-                        renderHashes();
-                        break;
+                        for (let i = 1; i < args.length; i += 2) { const f = args[i]; const v = args[i + 1]; if (redisStore.hashes[key][f] === undefined) added++; redisStore.hashes[key][f] = v; }
+                        result = `(integer) ${added}`; renderHashes(); break;
                     }
                     case 'HMSET': {
                         if (args.length < 3 || (args.length - 1) % 2 !== 0) throw new Error('HMSET requires key and field value pairs');
                         const key = args[0];
+                        ensureStructure(key, 'hash');
                         if (!redisStore.hashes[key]) redisStore.hashes[key] = {};
-                        for (let i = 1; i < args.length; i += 2) {
-                            const f = args[i]; const v = args[i + 1];
-                            redisStore.hashes[key][f] = v;
-                        }
-                        result = 'OK';
-                        renderHashes();
-                        break;
+                        for (let i = 1; i < args.length; i += 2) { const f = args[i]; const v = args[i + 1]; redisStore.hashes[key][f] = v; }
+                        result = 'OK'; renderHashes(); break;
                     }
                     case 'HGET': {
                         if (args.length < 2) throw new Error('HGET requires key and field');
-                        const h = redisStore.hashes[args[0]] || {};
-                        result = h[args[1]] !== undefined ? h[args[1]] : '(nil)';
-                        break;
+                        const key = args[0];
+                        const h = redisStore.hashes[key] || {};
+                        result = h[args[1]] !== undefined ? h[args[1]] : '(nil)'; break;
                     }
                     case 'HMGET': {
                         if (args.length < 2) throw new Error('HMGET requires key and field names');
-                        const h = redisStore.hashes[args[0]] || {};
+                        const key = args[0];
+                        const h = redisStore.hashes[key] || {};
                         const values = args.slice(1).map(f => (h[f] !== undefined ? `"${h[f]}"` : '(nil)'));
-                        result = values.map((value, index) => `${index + 1}) ${value}`);
-                        break;
+                        result = values.map((value, index) => `${index + 1}) ${value}`); break;
                     }
                     case 'HGETALL': {
                         if (args.length < 1) throw new Error('HGETALL requires key');
-                        const h = redisStore.hashes[args[0]] || {};
+                        const key = args[0];
+                        const h = redisStore.hashes[key] || {};
                         const entries = Object.entries(h);
                         const lines = [];
-                        entries.forEach(([f, v], idx) => {
-                            lines.push(`${idx * 2 + 1}) "${f}"`);
-                            lines.push(`${idx * 2 + 2}) "${v}"`);
-                        });
-                        result = lines.length ? lines : formatIndexed([]);
-                        break;
+                        entries.forEach(([f, v], idx) => { lines.push(`${idx * 2 + 1}) "${f}"`); lines.push(`${idx * 2 + 2}) "${v}"`); });
+                        result = lines.length ? lines : formatIndexed([]); break;
                     }
                     case 'HDEL': {
                         if (args.length < 2) throw new Error('HDEL requires key and field');
-                        const key = args[0]; const h = redisStore.hashes[key];
+                        const key = args[0];
+                        const h = redisStore.hashes[key];
                         if (!h) { result = '(integer) 0'; break; }
                         let removed = 0;
                         args.slice(1).forEach(f => { if (h[f] !== undefined) { delete h[f]; removed++; } });
                         if (Object.keys(h).length === 0) { delete redisStore.hashes[key]; delete ttlStore[key]; }
-                        renderHashes();
-                        result = `(integer) ${removed}`;
-                        break;
+                        renderHashes(); result = `(integer) ${removed}`; break;
                     }
                     case 'HEXISTS': {
                         if (args.length < 2) throw new Error('HEXISTS requires key and field');
-                        const h = redisStore.hashes[args[0]] || {};
-                        result = `(integer) ${h[args[1]] !== undefined ? 1 : 0}`;
-                        break;
+                        const key = args[0];
+                        const h = redisStore.hashes[key] || {};
+                        result = `(integer) ${h[args[1]] !== undefined ? 1 : 0}`; break;
                     }
                     case 'HLEN': {
                         if (args.length < 1) throw new Error('HLEN requires key');
-                        const h = redisStore.hashes[args[0]] || {};
-                        result = `(integer) ${Object.keys(h).length}`;
-                        break;
+                        const key = args[0];
+                        const h = redisStore.hashes[key] || {};
+                        result = `(integer) ${Object.keys(h).length}`; break;
                     }
                     case 'HKEYS': {
                         if (args.length < 1) throw new Error('HKEYS requires key');
-                        const h = redisStore.hashes[args[0]] || {};
-                        result = formatIndexed(Object.keys(h).map(f => `"${f}"`));
-                        break;
+                        const key = args[0];
+                        const h = redisStore.hashes[key] || {};
+                        result = formatIndexed(Object.keys(h).map(f => `"${f}"`)); break;
                     }
                     case 'HVALS': {
                         if (args.length < 1) throw new Error('HVALS requires key');
-                        const h = redisStore.hashes[args[0]] || {};
-                        result = formatIndexed(Object.values(h).map(v => `"${v}"`));
-                        break;
+                        const key = args[0];
+                        const h = redisStore.hashes[key] || {};
+                        result = formatIndexed(Object.values(h).map(v => `"${v}"`)); break;
                     }
                     case 'HINCRBY': {
                         if (args.length < 3) throw new Error('HINCRBY requires key, field, and increment');
                         const key = args[0]; const field = args[1]; const inc = parseInt(args[2], 10);
+                        ensureStructure(key, 'hash');
                         if (Number.isNaN(inc)) throw new Error('HINCRBY requires an integer increment');
                         if (!redisStore.hashes[key]) redisStore.hashes[key] = {};
                         const cur = redisStore.hashes[key][field] !== undefined ? parseInt(redisStore.hashes[key][field], 10) : 0;
@@ -1056,6 +1017,7 @@
                     case 'HINCRBYFLOAT': {
                         if (args.length < 3) throw new Error('HINCRBYFLOAT requires key, field, and increment');
                         const key = args[0]; const field = args[1]; const inc = parseFloat(args[2]);
+                        ensureStructure(key, 'hash');
                         if (Number.isNaN(inc)) throw new Error('HINCRBYFLOAT requires a numeric increment');
                         if (!redisStore.hashes[key]) redisStore.hashes[key] = {};
                         const cur = redisStore.hashes[key][field] !== undefined ? parseFloat(redisStore.hashes[key][field]) : 0;
@@ -1067,6 +1029,7 @@
                     case 'ZADD': {
                         if (args.length < 3) throw new Error('ZADD requires key, score, and member');
                         const key = args[0]; const rest = args.slice(1);
+                        ensureStructure(key, 'zset');
                         if (rest.length % 2 !== 0) throw new Error('ZADD requires score member pairs');
                         if (!redisStore.zsets[key]) redisStore.zsets[key] = [];
                         const map = new Map(redisStore.zsets[key].map(it => [it.member, it]));
@@ -1081,7 +1044,8 @@
                     }
                     case 'ZRANGE': {
                         if (args.length < 3) throw new Error('ZRANGE requires key, start, and stop');
-                        const key = args[0]; const start = parseInt(args[1], 10); const stopRaw = parseInt(args[2], 10);
+                        const key = args[0];
+                        const start = parseInt(args[1], 10); const stopRaw = parseInt(args[2], 10);
                         if (Number.isNaN(start) || Number.isNaN(stopRaw)) throw new Error('ZRANGE requires numeric start and stop');
                         const z = redisStore.zsets[key] || [];
                         const ns = start < 0 ? Math.max(z.length + start, 0) : start;
@@ -1097,7 +1061,8 @@
                     }
                     case 'ZRANGEBYSCORE': {
                         if (args.length < 3) throw new Error('ZRANGEBYSCORE requires key, min, and max');
-                        const key = args[0]; const minArg = args[1]; const maxArg = args[2]; const withScores = (args[3] || '').toUpperCase() === 'WITHSCORES';
+                        const key = args[0];
+                        const minArg = args[1]; const maxArg = args[2]; const withScores = (args[3] || '').toUpperCase() === 'WITHSCORES';
                         const z = redisStore.zsets[key] || [];
                         const parseB = v => (v === '-inf' ? -Infinity : (v === '+inf' || v === 'inf') ? Infinity : parseFloat(v));
                         const min = parseB(minArg); const max = parseB(maxArg);
@@ -1108,7 +1073,8 @@
                     }
                     case 'ZREM': {
                         if (args.length < 2) throw new Error('ZREM requires key and member');
-                        const key = args[0]; const members = new Set(args.slice(1)); const z = redisStore.zsets[key];
+                        const key = args[0];
+                        const members = new Set(args.slice(1)); const z = redisStore.zsets[key];
                         if (!z) { result = '(integer) 0'; break; }
                         let removed = 0;
                         redisStore.zsets[key] = z.filter(it => { if (members.has(it.member)) { removed++; return false; } return true; });
@@ -1116,7 +1082,8 @@
                         result = `(integer) ${removed}`; if (removed) renderZsets(); break;
                     }
                     case 'ZCARD': {
-                        const z = redisStore.zsets[args[0]];
+                        const key = args[0];
+                        const z = redisStore.zsets[key];
                         result = `(integer) ${z ? z.length : 0}`; break;
                     }
                     // Key management
@@ -1159,70 +1126,108 @@
                         if (args.length < 1) throw new Error('KEYS requires pattern');
                         const pattern = args[0];
                         const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const regexPattern = '^' + escaped.replace(/\*/g, '.*').replace(/\?/g, '.') + '$';
+                        const regexPattern = '^' + escaped.replace(/\\\*/g, '.*').replace(/\\\?/g, '.') + '$';
                         const regex = new RegExp(regexPattern);
                         const keys = getAllKeys().filter(k => regex.test(k)).sort();
                         result = formatIndexed(keys.map(k => `"${k}"`)); break;
                     }
+                    case 'SCAN': {
+                        if (args.length < 1) throw new Error('SCAN requires a cursor');
+                        let idx = parseInt(args[0], 10);
+                        if (Number.isNaN(idx) || idx < 0) throw new Error('Invalid cursor');
+                        let match = '*'; let count = 10;
+                        for (let i = 1; i < args.length; i++) {
+                            const opt = args[i].toUpperCase();
+                            if (opt === 'MATCH') { if (++i >= args.length) throw new Error('MATCH requires a pattern'); match = args[i]; }
+                            else if (opt === 'COUNT') { if (++i >= args.length) throw new Error('COUNT requires a number'); count = parseInt(args[i], 10); if (Number.isNaN(count) || count < 1) count = 10; }
+                            else { throw new Error('Syntax error'); }
+                        }
+                        const escaped = match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const regexPattern = '^' + escaped.replace(/\\\*/g, '.*').replace(/\\\?/g, '.') + '$';
+                        const regex = new RegExp(regexPattern);
+                        const all = getAllKeys().filter(k => regex.test(k)).sort();
+                        const slice = all.slice(idx, idx + count);
+                        const newCursor = (idx + slice.length) >= all.length ? 0 : (idx + slice.length);
+                        const lines = [`1) "${String(newCursor)}"`];
+                        if (slice.length === 0) {
+                            lines.push('2) (empty list or set)');
+                        } else {
+                            lines.push('2)');
+                            slice.forEach((k, i) => { lines.push(`   ${i + 1}) "${k}"`); });
+                        }
+                        result = lines;
+                        break;
+                    }
                     case 'HELP': {
-                        result = [
-                            'Redis Playground Help',
-                            '--- String Commands ---',
-                            'SET key value',
-                            'MSET key value [key value ...]',
-                            'GET key',
-                            'MGET key [key ...]',
-                            'DEL key [key ...]',
-                            'EXPIRE key seconds',
-                            'TTL key',
-                            'RENAME oldkey newkey',
-                            'KEYS pattern',
-                            '',
-                            '--- List Commands ---',
-                            'LPUSH key value [value ...]',
-                            'RPUSH key value [value ...]',
-                            'LPOP key',
-                            'RPOP key',
-                            'LRANGE key start stop',
-                            '',
-                            '--- Set Commands ---',
-                            'SADD key member [member ...]',
-                            'SREM key member [member ...]',
-                            'SISMEMBER key member',
-                            'SINTER key [key ...]',
-                            'SUNION key [key ...]',
-                            'SDIFF key [key ...]',
-                            'SCARD key',
-                            'SMEMBERS key',
-                            '',
-                            '--- Hash Commands ---',
-                            'HSET key field value [field value ...]',
-                            'HMSET key field value [field value ...]',
-                            'HGET key field',
-                            'HMGET key field [field ...]',
-                            'HGETALL key',
-                            'HDEL key field [field ...]',
-                            'HEXISTS key field',
-                            'HLEN key',
-                            'HKEYS key',
-                            'HVALS key',
-                            'HINCRBY key field increment',
-                            'HINCRBYFLOAT key field increment',
-                            '',
-                            '--- Sorted Set Commands ---',
-                            'ZADD key score member [score member ...]',
-                            'ZRANGE key start stop [WITHSCORES]',
-                            'ZRANGEBYSCORE key min max [WITHSCORES]',
-                            'ZREM key member [member ...]',
-                            'ZCARD key',
-                            '',
-                            'Type HELP to see this list again.'
-                        ];
+                        if (args.length === 1) {
+                            showCommandHelp(args[0].toUpperCase());
+                            result = undefined;
+                        } else {
+                            result = [
+                                'Redis Playground Help',
+                                '--- String Commands ---',
+                                'SET key value',
+                                'MSET key value [key value ...]',
+                                'GET key',
+                                'MGET key [key ...]',
+                                'DEL key [key ...]',
+                                'EXISTS key [key ...]',
+                                'PERSIST key',
+                                'EXPIRE key seconds',
+                                'TTL key',
+                                'RENAME oldkey newkey',
+                                'TYPE key',
+                                'KEYS pattern',
+                                'SCAN cursor [MATCH pattern] [COUNT count]',
+                                '',
+                                '--- List Commands ---',
+                                'LPUSH key value [value ...]',
+                                'RPUSH key value [value ...]',
+                                'LPOP key',
+                                'RPOP key',
+                                'LRANGE key start stop',
+                                '',
+                                '--- Set Commands ---',
+                                'SADD key member [member ...]',
+                                'SREM key member [member ...]',
+                                'SISMEMBER key member',
+                                'SINTER key [key ...]',
+                                'SUNION key [key ...]',
+                                'SDIFF key [key ...]',
+                                'SCARD key',
+                                'SMEMBERS key',
+                                '',
+                                '--- Hash Commands ---',
+                                'HSET key field value [field value ...]',
+                                'HMSET key field value [field value ...]',
+                                'HGET key field',
+                                'HMGET key field [field ...]',
+                                'HGETALL key',
+                                'HDEL key field [field ...]',
+                                'HEXISTS key field',
+                                'HLEN key',
+                                'HKEYS key',
+                                'HVALS key',
+                                'HINCRBY key field increment',
+                                'HINCRBYFLOAT key field increment',
+                                '',
+                                '--- Sorted Set Commands ---',
+                                'ZADD key score member [score member ...]',
+                                'ZRANGE key start stop [WITHSCORES]',
+                                'ZRANGEBYSCORE key min max [WITHSCORES]',
+                                'ZREM key member [member ...]',
+                                'ZCARD key',
+                                '',
+                                'Type HELP [COMMAND] for command-specific help.'
+                            ];
+                        }
                         break;
                     }
                     default:
                         throw new Error(`Unknown command: ${command}`);
                 }
+
+                // Output command and result
                 addOutput(`redis> ${input}`, 'text-green-400');
                 if (Array.isArray(result)) {
                     result.forEach(line => addOutput(line, 'text-gray-300'));
@@ -1231,25 +1236,32 @@
                 } else if (result !== undefined && result !== null && result !== '') {
                     addOutput(result, 'text-gray-300');
                 }
+
+                // Persist + metrics
                 updateMemoryDisplay();
                 updateOpsCounter();
-                if (aofEnabled) { logToAOF(input); }
-                if (rdbEnabled && Math.random() < 0.3) { triggerSnapshot(); }
+                if (WRITE_CMDS.has(parsed.command)) {
+                    if (aofEnabled) logToAOF(input);              // AOF: writes only
+                    if (rdbEnabled) {                              // RDB: deterministic interval on writes
+                        writesSinceLastSnapshot++;
+                        if (writesSinceLastSnapshot % rdbInterval === 0) triggerSnapshot();
+                    }
+                }
+                saveState();
+                // Track history
+                if (input.trim() && cmdHistory[cmdHistory.length - 1] !== input.trim()) {
+                    cmdHistory.push(input.trim());
+                    historyIndex = cmdHistory.length;
+                }
             } catch (error) {
                 addOutput(`redis> ${input}`, 'text-red-400');
                 addOutput(`(error) ${error.message}`, 'text-red-400');
-                // Show contextual help for the attempted command, when available
                 try {
-                    const parsed = parseCommand(input);
-                    if (parsed.command) {
-                        showCommandHelp(parsed.command);
-                    }
-                } catch (_) {
-                    // ignore parse errors here
-                }
+                    if (!parsed) parsed = parseCommand(input);
+                    if (parsed.command) showCommandHelp(parsed.command);
+                } catch (_) {}
             }
         }
-
 
         function addOutput(text, className = 'text-gray-300') {
             const output = document.getElementById('output');
@@ -1258,11 +1270,14 @@
             line.textContent = text;
             output.appendChild(line);
             output.scrollTop = output.scrollHeight;
-            
-            // Keep only last 50 lines
-            while (output.children.length > 50) {
+            // Keep only last 200 lines
+            while (output.children.length > 200) {
                 output.removeChild(output.firstChild);
             }
+        }
+        function clearOutput() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<div class="text-gray-500">redis&gt; Ready for commands...</div>';
         }
 
         function getTtlHtml(key) {
@@ -1275,16 +1290,14 @@
             return '';
         }
 
-        // Rendering Functions
+        // Rendering Functions (no inline event handlers; use data- attributes)
         function renderStrings() {
             const container = document.getElementById('stringContainer');
             const entries = Object.entries(redisStore.strings);
-            
             if (entries.length === 0) {
                 container.innerHTML = '<div class="text-gray-500 text-center py-8">No string keys yet. Try: SET mykey myvalue</div>';
                 return;
             }
-            
             container.innerHTML = entries.map(([key, value]) => `
                 <div class="bg-gray-800 rounded-lg p-4 flex items-center justify-between fade-in">
                     <div class="flex items-center gap-4 flex-1">
@@ -1293,7 +1306,7 @@
                         <div class="text-gray-500">→</div>
                         <div class="font-mono text-blue-300 flex-1 truncate">${escapeHtml(String(value))}</div>
                     </div>
-                    <button onclick="deleteKey('strings', '${escapeHtml(key)}')" class="text-red-400 hover:text-red-300 ml-2">✕</button>
+                    <button class="delete-btn text-red-400 hover:text-red-300 ml-2" data-type="strings" data-key="${escapeHtml(key)}" title="Delete key">✕</button>
                 </div>
             `).join('');
         }
@@ -1301,12 +1314,10 @@
         function renderLists() {
             const container = document.getElementById('listContainer');
             const entries = Object.entries(redisStore.lists);
-            
             if (entries.length === 0) {
                 container.innerHTML = '<div class="text-gray-500 text-center py-8">No lists yet. Try: LPUSH mylist item1</div>';
                 return;
             }
-            
             container.innerHTML = entries.map(([key, items]) => `
                 <div class="bg-gray-800 rounded-lg p-4 fade-in">
                     <div class="flex items-center justify-between mb-3">
@@ -1315,7 +1326,7 @@
                             <div class="font-mono text-yellow-300 flex items-center">${escapeHtml(key)}${getTtlHtml(key)}</div>
                             <div class="text-gray-500 text-sm">(${items.length} items)</div>
                         </div>
-                        <button onclick="deleteKey('lists', '${escapeHtml(key)}')" class="text-red-400 hover:text-red-300">✕</button>
+                        <button class="delete-btn text-red-400 hover:text-red-300" data-type="lists" data-key="${escapeHtml(key)}" title="Delete key">✕</button>
                     </div>
                     <div class="space-y-2">
                         <div class="text-xs text-gray-500 mb-1">← HEAD (LPUSH adds here)</div>
@@ -1334,12 +1345,10 @@
         function renderSets() {
             const container = document.getElementById('setContainer');
             const entries = Object.entries(redisStore.sets);
-            
             if (entries.length === 0) {
                 container.innerHTML = '<div class="text-gray-500 text-center py-8">No sets yet. Try: SADD myset member1</div>';
                 return;
             }
-            
             container.innerHTML = entries.map(([key, set]) => {
                 const members = Array.from(set);
                 return `
@@ -1350,7 +1359,7 @@
                                 <div class="font-mono text-yellow-300 flex items-center">${escapeHtml(key)}${getTtlHtml(key)}</div>
                                 <div class="text-gray-500 text-sm">(${members.length} unique)</div>
                             </div>
-                            <button onclick="deleteKey('sets', '${escapeHtml(key)}')" class="text-red-400 hover:text-red-300">✕</button>
+                            <button class="delete-btn text-red-400 hover:text-red-300" data-type="sets" data-key="${escapeHtml(key)}" title="Delete key">✕</button>
                         </div>
                         <div class="flex flex-wrap gap-2">
                             ${members.map((member, i) => `
@@ -1367,12 +1376,10 @@
         function renderHashes() {
             const container = document.getElementById('hashContainer');
             const entries = Object.entries(redisStore.hashes);
-            
             if (entries.length === 0) {
                 container.innerHTML = '<div class="text-gray-500 text-center py-8">No hashes yet. Try: HSET myhash field1 value1</div>';
                 return;
             }
-            
             container.innerHTML = entries.map(([key, hash]) => `
                 <div class="bg-gray-800 rounded-lg p-4 fade-in">
                     <div class="flex items-center justify-between mb-3">
@@ -1381,7 +1388,7 @@
                             <div class="font-mono text-yellow-300 flex items-center">${escapeHtml(key)}${getTtlHtml(key)}</div>
                             <div class="text-gray-500 text-sm">(${Object.keys(hash).length} fields)</div>
                         </div>
-                        <button onclick="deleteKey('hashes', '${escapeHtml(key)}')" class="text-red-400 hover:text-red-300">✕</button>
+                        <button class="delete-btn text-red-400 hover:text-red-300" data-type="hashes" data-key="${escapeHtml(key)}" title="Delete key">✕</button>
                     </div>
                     <div class="bg-gray-900 rounded overflow-hidden">
                         <table class="w-full">
@@ -1408,14 +1415,16 @@
         function renderZsets() {
             const container = document.getElementById('zsetContainer');
             const entries = Object.entries(redisStore.zsets);
-            
             if (entries.length === 0) {
                 container.innerHTML = '<div class="text-gray-500 text-center py-8">No sorted sets yet. Try: ZADD myzset 100 member1</div>';
                 return;
             }
-            
             container.innerHTML = entries.map(([key, items]) => {
-                const maxScore = Math.max(...items.map(item => item.score), 1);
+                // Normalize width even with negative/outlier scores
+                const scores = items.map(item => item.score);
+                const min = scores.length ? Math.min(...scores) : 0;
+                const max = scores.length ? Math.max(...scores) : 1;
+                const range = (max - min) === 0 ? 1 : (max - min);
                 return `
                     <div class="bg-gray-800 rounded-lg p-4 fade-in">
                         <div class="flex items-center justify-between mb-3">
@@ -1424,11 +1433,11 @@
                                 <div class="font-mono text-yellow-300 flex items-center">${escapeHtml(key)}${getTtlHtml(key)}</div>
                                 <div class="text-gray-500 text-sm">(${items.length} members)</div>
                             </div>
-                            <button onclick="deleteKey('zsets', '${escapeHtml(key)}')" class="text-red-400 hover:text-red-300">✕</button>
+                            <button class="delete-btn text-red-400 hover:text-red-300" data-type="zsets" data-key="${escapeHtml(key)}" title="Delete key">✕</button>
                         </div>
                         <div class="space-y-2">
                             ${items.map((item, i) => {
-                                const barWidth = (item.score / maxScore) * 100;
+                                const width = Math.round(((item.score - min) / range) * 100);
                                 return `
                                     <div class="fade-in" style="animation-delay: ${i * 0.05}s">
                                         <div class="flex items-center gap-2 mb-1">
@@ -1437,7 +1446,7 @@
                                             <div class="bg-yellow-600 text-white px-2 py-1 rounded text-xs font-bold">${item.score}</div>
                                         </div>
                                         <div class="bg-gray-900 rounded-full h-2 overflow-hidden">
-                                            <div class="bg-gradient-to-r from-yellow-500 to-orange-500 h-full zset-bar" style="width: ${barWidth}%"></div>
+                                            <div class="bg-gradient-to-r from-yellow-500 to-orange-500 h-full zset-bar" style="width: ${width}%"></div>
                                         </div>
                                     </div>
                                 `;
@@ -1448,21 +1457,7 @@
             }).join('');
         }
 
-        function renderAll() {
-            renderStrings();
-            renderLists();
-            renderSets();
-            renderHashes();
-            renderZsets();
-        }
-
-        function deleteKey(type, key) {
-            delete ttlStore[key];
-            delete redisStore[type][key];
-            renderAll();
-            updateMemoryDisplay();
-            addOutput(`Deleted key: ${key}`, 'text-yellow-400');
-        }
+        function renderAll() { renderStrings(); renderLists(); renderSets(); renderHashes(); renderZsets(); }
 
         // Persistence Functions
         function logToAOF(command) {
@@ -1471,11 +1466,8 @@
             line.className = 'text-blue-300 aof-line';
             line.textContent = `> ${command}`;
             aofVisual.insertBefore(line, aofVisual.firstChild);
-            
-            // Keep only last 10 lines
-            while (aofVisual.children.length > 10) {
-                aofVisual.removeChild(aofVisual.lastChild);
-            }
+            // Keep only last 50 lines
+            while (aofVisual.children.length > 50) aofVisual.removeChild(aofVisual.lastChild);
         }
 
         function triggerSnapshot() {
@@ -1484,26 +1476,96 @@
             snapshot.className = 'bg-orange-600 text-white px-2 py-1 rounded text-xs snapshot-flash';
             snapshot.textContent = `Snapshot ${new Date().toLocaleTimeString()}`;
             rdbVisual.insertBefore(snapshot, rdbVisual.firstChild);
-            
-            // Keep only last 3 snapshots
-            while (rdbVisual.children.length > 3) {
-                rdbVisual.removeChild(rdbVisual.lastChild);
-            }
+            // Keep only last 5 snapshots
+            while (rdbVisual.children.length > 5) rdbVisual.removeChild(rdbVisual.lastChild);
         }
+
+        // Local storage (persist playground state)
+        function serializeStore() {
+            return JSON.stringify({
+                strings: redisStore.strings,
+                lists: redisStore.lists,
+                sets: Object.fromEntries(Object.entries(redisStore.sets).map(([k, v]) => [k, Array.from(v)])),
+                hashes: redisStore.hashes,
+                zsets: redisStore.zsets,
+                ttl: ttlStore,
+                rdbEnabled, aofEnabled, rdbInterval
+            });
+        }
+        function loadSerializedStore(json) {
+            try {
+                const data = JSON.parse(json);
+                redisStore.strings = data.strings || {};
+                redisStore.lists = data.lists || {};
+                redisStore.sets = Object.fromEntries(Object.entries(data.sets || {}).map(([k, arr]) => [k, new Set(arr)]));
+                redisStore.hashes = data.hashes || {};
+                redisStore.zsets = data.zsets || {};
+                Object.keys(ttlStore).forEach(k => delete ttlStore[k]);
+                Object.assign(ttlStore, data.ttl || {});
+                rdbEnabled = !!data.rdbEnabled;
+                aofEnabled = !!data.aofEnabled;
+                rdbInterval = Number.isFinite(data.rdbInterval) && data.rdbInterval > 0 ? data.rdbInterval : 10;
+                // reflect UI
+                document.getElementById('rdbIntervalInput').value = rdbInterval;
+                setToggleUI('rdb', rdbEnabled);
+                setToggleUI('aof', aofEnabled);
+            } catch { /* ignore */ }
+        }
+        function saveState() { try { localStorage.setItem('redisPlaygroundStateV2', serializeStore()); } catch { /* ignore */ } }
+        function restoreState() { const json = localStorage.getItem('redisPlaygroundStateV2'); if (json) loadSerializedStore(json); }
 
         // Event Listeners
         document.getElementById('executeBtn').addEventListener('click', () => {
             const input = document.getElementById('commandInput');
-            if (input.value.trim()) {
-                executeCommand(input.value);
+            const val = input.value;
+            if (val.trim()) {
+                executeCommand(val);
                 input.value = '';
             }
         });
 
-        document.getElementById('commandInput').addEventListener('keypress', (e) => {
+        // Input keyboard: Enter executes, Up/Down history, Tab autocomplete
+        const inputEl = document.getElementById('commandInput');
+        inputEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 document.getElementById('executeBtn').click();
+                e.preventDefault();
+            } else if (e.key === 'ArrowUp') {
+                if (cmdHistory.length) {
+                    historyIndex = Math.max(0, historyIndex - 1);
+                    inputEl.value = cmdHistory[historyIndex] || '';
+                    e.preventDefault();
+                }
+            } else if (e.key === 'ArrowDown') {
+                if (cmdHistory.length) {
+                    historyIndex = Math.min(cmdHistory.length, historyIndex + 1);
+                    inputEl.value = cmdHistory[historyIndex] || '';
+                    e.preventDefault();
+                }
+            } else if (e.key === 'Tab') {
+                const val = inputEl.value;
+                const firstToken = val.trim().split(/\s+/)[0].toUpperCase();
+                const matches = Object.keys(COMMAND_SPECS).filter(c => c.startsWith(firstToken));
+                if (firstToken.length && matches.length === 1) {
+                    const rest = val.replace(/^\S*/, '').trim();
+                    inputEl.value = matches[0] + (rest ? ' ' + rest : ' ');
+                }
+                e.preventDefault();
             }
+        });
+
+        // Visualization delete buttons: delegated (no inline handlers)
+        document.getElementById('visualizationArea').addEventListener('click', (e) => {
+            const btn = e.target.closest('.delete-btn');
+            if (!btn) return;
+            const type = btn.dataset.type;
+            const key = btn.dataset.key;
+            delete ttlStore[key];
+            delete redisStore[type][key];
+            renderAll();
+            updateMemoryDisplay();
+            addOutput(`Deleted key: ${key}`, 'text-yellow-400');
+            saveState();
         });
 
         // Tab switching
@@ -1511,17 +1573,11 @@
             btn.addEventListener('click', () => {
                 const type = btn.dataset.type;
                 currentTab = type;
-                
-                // Update button styles
                 document.querySelectorAll('.tab-btn').forEach(b => {
                     b.className = 'tab-btn px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 transition-colors';
                 });
                 btn.className = 'tab-btn px-4 py-2 rounded bg-red-600 text-white font-semibold';
-                
-                // Show/hide panels
-                document.querySelectorAll('.visualization-panel').forEach(panel => {
-                    panel.classList.add('hidden');
-                });
+                document.querySelectorAll('.visualization-panel').forEach(panel => panel.classList.add('hidden'));
                 document.getElementById(type + 'Viz').classList.remove('hidden');
             });
         });
@@ -1530,78 +1586,76 @@
         document.querySelectorAll('.scenario-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const commands = JSON.parse(btn.dataset.commands);
-                commands.forEach((cmd, i) => {
-                    setTimeout(() => {
-                        executeCommand(cmd);
-                    }, i * 300);
-                });
+                commands.forEach((cmd, i) => { setTimeout(() => executeCommand(cmd), i * 300); });
             });
         });
 
-        // Persistence toggles
-        document.getElementById('rdbToggle').addEventListener('click', () => {
-            rdbEnabled = !rdbEnabled;
-            const indicator = document.getElementById('rdbIndicator');
-            const status = document.getElementById('rdbStatus');
-            const btn = document.getElementById('rdbToggle');
-            
-            if (rdbEnabled) {
-                indicator.className = 'w-3 h-3 rounded-full bg-orange-500';
-                status.textContent = 'Active - Snapshots every ~10 ops';
-                status.className = 'text-xs text-orange-400 mb-2';
-                btn.className = 'px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 transition-colors border-2 border-orange-400';
-            } else {
-                indicator.className = 'w-3 h-3 rounded-full bg-gray-500';
-                status.textContent = 'Disabled';
-                status.className = 'text-xs text-gray-500 mb-2';
-                btn.className = 'px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors border-2 border-transparent';
+        // Toggle helpers
+        function setToggleUI(kind, enabled) {
+            const indicator = document.getElementById(kind + 'Indicator');
+            const status = document.getElementById(kind + 'Status');
+            const btn = document.getElementById(kind + 'Toggle');
+            if (kind === 'rdb') {
+                if (enabled) {
+                    indicator.className = 'w-3 h-3 rounded-full bg-orange-500';
+                    status.textContent = `Active — snapshot every ${rdbInterval} ops`;
+                    status.className = 'text-xs text-orange-400 mb-2';
+                    btn.className = 'px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 transition-colors border-2 border-orange-400';
+                } else {
+                    indicator.className = 'w-3 h-3 rounded-full bg-gray-500';
+                    status.textContent = 'Disabled';
+                    status.className = 'text-xs text-gray-500 mb-2';
+                    btn.className = 'px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors border-2 border-transparent';
+                }
+            } else if (kind === 'aof') {
+                if (enabled) {
+                    indicator.className = 'w-3 h-3 rounded-full bg-blue-500';
+                    status.textContent = 'Active — logging writes only';
+                    status.className = 'text-xs text-blue-400 mb-2';
+                    btn.className = 'px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors border-2 border-blue-400';
+                } else {
+                    indicator.className = 'w-3 h-3 rounded-full bg-gray-500';
+                    status.textContent = 'Disabled';
+                    status.className = 'text-xs text-gray-500 mb-2';
+                    btn.className = 'px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors border-2 border-transparent';
+                }
             }
-        });
-
-        document.getElementById('aofToggle').addEventListener('click', () => {
-            aofEnabled = !aofEnabled;
-            const indicator = document.getElementById('aofIndicator');
-            const status = document.getElementById('aofStatus');
-            const btn = document.getElementById('aofToggle');
-            
-            if (aofEnabled) {
-                indicator.className = 'w-3 h-3 rounded-full bg-blue-500';
-                status.textContent = 'Active - Logging all writes';
-                status.className = 'text-xs text-blue-400 mb-2';
-                btn.className = 'px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors border-2 border-blue-400';
-            } else {
-                indicator.className = 'w-3 h-3 rounded-full bg-gray-500';
-                status.textContent = 'Disabled';
-                status.className = 'text-xs text-gray-500 mb-2';
-                btn.className = 'px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors border-2 border-transparent';
-            }
-        });
-
-        // Utility function
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
         }
 
-        // Initialize
-        renderAll();
-        updateMemoryDisplay();
+        // Persistence toggles
+        document.getElementById('rdbToggle').addEventListener('click', () => {
+            rdbEnabled = !rdbEnabled; writesSinceLastSnapshot = 0;
+            setToggleUI('rdb', rdbEnabled);
+            saveState();
+        });
+        document.getElementById('aofToggle').addEventListener('click', () => {
+            aofEnabled = !aofEnabled;
+            setToggleUI('aof', aofEnabled);
+            saveState();
+        });
+        document.getElementById('rdbIntervalInput').addEventListener('change', (e) => {
+            const val = parseInt(e.target.value, 10);
+            rdbInterval = (!Number.isNaN(val) && val > 0) ? val : 10;
+            e.target.value = rdbInterval;
+            setToggleUI('rdb', rdbEnabled);
+            saveState();
+        });
 
+        // Utility
+        function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+
+        // TTL tick + expiry check
         setInterval(() => {
             const now = Date.now();
             let reRender = false;
-
-            // Update countdowns
             document.querySelectorAll('[data-ttl-key]').forEach(el => {
                 const key = el.dataset.ttlKey;
                 if (ttlStore[key]) {
                     const remaining = Math.max(0, Math.round((ttlStore[key] - now) / 1000));
-                    el.querySelector('.ttl-countdown').textContent = `(${remaining}s)`;
+                    const span = el.querySelector('.ttl-countdown');
+                    if (span) span.textContent = `(${remaining}s)`;
                 }
             });
-
-            // Check for expired keys
             for (const key in ttlStore) {
                 if (ttlStore[key] <= now) {
                     if (redisStore.strings[key] !== undefined) delete redisStore.strings[key];
@@ -1614,12 +1668,15 @@
                     addOutput(`Key expired: ${escapeHtml(key)}`, 'text-yellow-400');
                 }
             }
-
-            if (reRender) {
-                renderAll();
-                updateMemoryDisplay();
-            }
+            if (reRender) { renderAll(); updateMemoryDisplay(); saveState(); }
         }, 1000);
+
+        // Initialize
+        restoreState();
+        renderAll();
+        updateMemoryDisplay();
+        setToggleUI('rdb', rdbEnabled);
+        setToggleUI('aof', aofEnabled);
     </script>
 </body>
 </html>
