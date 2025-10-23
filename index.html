@@ -638,9 +638,11 @@
             return null;
         }
 
-        function assertTypeOrEmpty(key, expected) {
-            const t = keyType(key);
-            if (t && t !== expected) throw new Error('WRONGTYPE Operation against a key holding the wrong kind of value');
+        function ensureStructure(key, expected) {
+            const currentType = keyType(key);
+            if (currentType && currentType !== expected) {
+                removeKeyFromAllStructures(key);
+            }
         }
 
         function removeKeyFromAllStructures(key) {
@@ -702,14 +704,14 @@
             for (let i = 0; i < input.length; i++) {
                 const char = input[i];
                 if (inQuotes) {
-                    if (char === '\\\\' && i + 1 < input.length) { current += input[i + 1]; i++; }
+                    if (char === '\\' && i + 1 < input.length) { current += input[i + 1]; i++; }
                     else if (char === quoteChar) { inQuotes = false; }
                     else { current += char; }
                 } else {
                     if (char === '"' || char === "'") {
                         inQuotes = true; quoteChar = char;
                         if (current.length > 0) { tokens.push(current); current = ''; }
-                    } else if (/\\s/.test(char)) {
+                    } else if (/\s/.test(char)) {
                         if (current.length > 0) { tokens.push(current); current = ''; }
                     } else { current += char; }
                 }
@@ -774,15 +776,11 @@
                     case 'GET': {
                         if (args.length < 1) throw new Error('GET requires key');
                         const key = args[0];
-                        const t = keyType(key);
-                        if (t && t !== 'string') throw new Error('WRONGTYPE Operation against a key holding the wrong kind of value');
                         result = redisStore.strings[key] !== undefined ? redisStore.strings[key] : '(nil)';
                         break;
                     }
                     case 'MGET': {
                         if (args.length < 1) throw new Error('MGET requires at least one key');
-                        // If any key exists with non-string type, error (Redis behavior)
-                        for (const k of args) { const t = keyType(k); if (t && t !== 'string') throw new Error('WRONGTYPE Operation against a key holding the wrong kind of value'); }
                         const values = args.map(k => (redisStore.strings[k] !== undefined ? `"${redisStore.strings[k]}"` : '(nil)'));
                         result = formatIndexed(values);
                         break;
@@ -808,7 +806,8 @@
                     // List commands
                     case 'LPUSH': {
                         if (args.length < 2) throw new Error('LPUSH requires key and value');
-                        const key = args[0]; assertTypeOrEmpty(key, 'list');
+                        const key = args[0];
+                        ensureStructure(key, 'list');
                         const values = args.slice(1);
                         if (!redisStore.lists[key]) redisStore.lists[key] = [];
                         values.forEach(v => redisStore.lists[key].unshift(v));
@@ -818,7 +817,8 @@
                     }
                     case 'RPUSH': {
                         if (args.length < 2) throw new Error('RPUSH requires key and value');
-                        const key = args[0]; assertTypeOrEmpty(key, 'list');
+                        const key = args[0];
+                        ensureStructure(key, 'list');
                         const values = args.slice(1);
                         if (!redisStore.lists[key]) redisStore.lists[key] = [];
                         values.forEach(v => redisStore.lists[key].push(v));
@@ -828,7 +828,7 @@
                     }
                     case 'LPOP': {
                         if (args.length < 1) throw new Error('LPOP requires key');
-                        const key = args[0]; assertTypeOrEmpty(key, 'list');
+                        const key = args[0];
                         const list = redisStore.lists[key];
                         if (!list || list.length === 0) { result = '(nil)'; }
                         else {
@@ -841,7 +841,7 @@
                     }
                     case 'RPOP': {
                         if (args.length < 1) throw new Error('RPOP requires key');
-                        const key = args[0]; assertTypeOrEmpty(key, 'list');
+                        const key = args[0];
                         const list = redisStore.lists[key];
                         if (!list || list.length === 0) { result = '(nil)'; }
                         else {
@@ -854,7 +854,7 @@
                     }
                     case 'LRANGE': {
                         if (args.length < 3) throw new Error('LRANGE requires key, start, and stop');
-                        const key = args[0]; assertTypeOrEmpty(key, 'list');
+                        const key = args[0];
                         const start = parseInt(args[1], 10);
                         const stopRaw = parseInt(args[2], 10);
                         if (Number.isNaN(start) || Number.isNaN(stopRaw)) throw new Error('LRANGE requires numeric start and stop');
@@ -873,7 +873,8 @@
                     // Set commands
                     case 'SADD': {
                         if (args.length < 2) throw new Error('SADD requires key and member');
-                        const key = args[0]; assertTypeOrEmpty(key, 'set');
+                        const key = args[0];
+                        ensureStructure(key, 'set');
                         const members = args.slice(1);
                         if (!redisStore.sets[key]) redisStore.sets[key] = new Set();
                         let added = 0;
@@ -882,7 +883,7 @@
                     }
                     case 'SREM': {
                         if (args.length < 2) throw new Error('SREM requires key and member');
-                        const key = args[0]; assertTypeOrEmpty(key, 'set');
+                        const key = args[0];
                         const members = args.slice(1);
                         const set = redisStore.sets[key];
                         if (!set) { result = '(integer) 0'; }
@@ -896,46 +897,43 @@
                     }
                     case 'SISMEMBER': {
                         if (args.length < 2) throw new Error('SISMEMBER requires key and member');
-                        const key = args[0]; assertTypeOrEmpty(key, 'set');
+                        const key = args[0];
                         const set = redisStore.sets[key];
                         result = `(integer) ${set && set.has(args[1]) ? 1 : 0}`; break;
                     }
                     case 'SINTER': {
                         if (args.length < 1) throw new Error('SINTER requires at least one key');
-                        for (const k of args) { const t = keyType(k); if (t && t !== 'set') throw new Error('WRONGTYPE Operation against a key holding the wrong kind of value'); }
                         const sets = args.map(k => new Set(redisStore.sets[k] ? Array.from(redisStore.sets[k]) : []));
                         const inter = sets.length ? Array.from(sets[0]).filter(v => sets.every(s => s.has(v))) : [];
                         result = formatIndexed(inter.map(m => `"${m}"`)); break;
                     }
                     case 'SUNION': {
                         if (args.length < 1) throw new Error('SUNION requires at least one key');
-                        for (const k of args) { const t = keyType(k); if (t && t !== 'set') throw new Error('WRONGTYPE Operation against a key holding the wrong kind of value'); }
                         const union = new Set();
                         args.forEach(k => { const s = redisStore.sets[k]; if (s) s.forEach(v => union.add(v)); });
                         result = formatIndexed(Array.from(union).map(m => `"${m}"`)); break;
                     }
                     case 'SDIFF': {
                         if (args.length < 1) throw new Error('SDIFF requires at least one key');
-                        const firstType = keyType(args[0]); if (firstType && firstType !== 'set') throw new Error('WRONGTYPE Operation against a key holding the wrong kind of value');
-                        for (const k of args.slice(1)) { const t = keyType(k); if (t && t !== 'set') throw new Error('WRONGTYPE Operation against a key holding the wrong kind of value'); }
                         const base = redisStore.sets[args[0]];
                         const diff = base ? Array.from(base).filter(v => !args.slice(1).some(k => redisStore.sets[k]?.has(v))) : [];
                         result = formatIndexed(diff.map(m => `"${m}"`)); break;
                     }
                     case 'SCARD': {
-                        const key = args[0]; assertTypeOrEmpty(key, 'set');
+                        const key = args[0];
                         const set = redisStore.sets[key];
                         result = `(integer) ${set ? set.size : 0}`; break;
                     }
                     case 'SMEMBERS': {
-                        const key = args[0]; assertTypeOrEmpty(key, 'set');
+                        const key = args[0];
                         const set = redisStore.sets[key];
                         result = formatIndexed(set ? Array.from(set).map(m => `"${m}"`) : []); break;
                     }
                     // Hash commands
                     case 'HSET': {
                         if (args.length < 3 || (args.length - 1) % 2 !== 0) throw new Error('HSET requires key and field value pairs');
-                        const key = args[0]; assertTypeOrEmpty(key, 'hash');
+                        const key = args[0];
+                        ensureStructure(key, 'hash');
                         if (!redisStore.hashes[key]) redisStore.hashes[key] = {};
                         let added = 0;
                         for (let i = 1; i < args.length; i += 2) { const f = args[i]; const v = args[i + 1]; if (redisStore.hashes[key][f] === undefined) added++; redisStore.hashes[key][f] = v; }
@@ -943,27 +941,28 @@
                     }
                     case 'HMSET': {
                         if (args.length < 3 || (args.length - 1) % 2 !== 0) throw new Error('HMSET requires key and field value pairs');
-                        const key = args[0]; assertTypeOrEmpty(key, 'hash');
+                        const key = args[0];
+                        ensureStructure(key, 'hash');
                         if (!redisStore.hashes[key]) redisStore.hashes[key] = {};
                         for (let i = 1; i < args.length; i += 2) { const f = args[i]; const v = args[i + 1]; redisStore.hashes[key][f] = v; }
                         result = 'OK'; renderHashes(); break;
                     }
                     case 'HGET': {
                         if (args.length < 2) throw new Error('HGET requires key and field');
-                        const key = args[0]; assertTypeOrEmpty(key, 'hash');
+                        const key = args[0];
                         const h = redisStore.hashes[key] || {};
                         result = h[args[1]] !== undefined ? h[args[1]] : '(nil)'; break;
                     }
                     case 'HMGET': {
                         if (args.length < 2) throw new Error('HMGET requires key and field names');
-                        const key = args[0]; assertTypeOrEmpty(key, 'hash');
+                        const key = args[0];
                         const h = redisStore.hashes[key] || {};
                         const values = args.slice(1).map(f => (h[f] !== undefined ? `"${h[f]}"` : '(nil)'));
                         result = values.map((value, index) => `${index + 1}) ${value}`); break;
                     }
                     case 'HGETALL': {
                         if (args.length < 1) throw new Error('HGETALL requires key');
-                        const key = args[0]; assertTypeOrEmpty(key, 'hash');
+                        const key = args[0];
                         const h = redisStore.hashes[key] || {};
                         const entries = Object.entries(h);
                         const lines = [];
@@ -972,7 +971,7 @@
                     }
                     case 'HDEL': {
                         if (args.length < 2) throw new Error('HDEL requires key and field');
-                        const key = args[0]; assertTypeOrEmpty(key, 'hash');
+                        const key = args[0];
                         const h = redisStore.hashes[key];
                         if (!h) { result = '(integer) 0'; break; }
                         let removed = 0;
@@ -982,32 +981,32 @@
                     }
                     case 'HEXISTS': {
                         if (args.length < 2) throw new Error('HEXISTS requires key and field');
-                        const key = args[0]; assertTypeOrEmpty(key, 'hash');
+                        const key = args[0];
                         const h = redisStore.hashes[key] || {};
                         result = `(integer) ${h[args[1]] !== undefined ? 1 : 0}`; break;
                     }
                     case 'HLEN': {
                         if (args.length < 1) throw new Error('HLEN requires key');
-                        const key = args[0]; assertTypeOrEmpty(key, 'hash');
+                        const key = args[0];
                         const h = redisStore.hashes[key] || {};
                         result = `(integer) ${Object.keys(h).length}`; break;
                     }
                     case 'HKEYS': {
                         if (args.length < 1) throw new Error('HKEYS requires key');
-                        const key = args[0]; assertTypeOrEmpty(key, 'hash');
+                        const key = args[0];
                         const h = redisStore.hashes[key] || {};
                         result = formatIndexed(Object.keys(h).map(f => `"${f}"`)); break;
                     }
                     case 'HVALS': {
                         if (args.length < 1) throw new Error('HVALS requires key');
-                        const key = args[0]; assertTypeOrEmpty(key, 'hash');
+                        const key = args[0];
                         const h = redisStore.hashes[key] || {};
                         result = formatIndexed(Object.values(h).map(v => `"${v}"`)); break;
                     }
                     case 'HINCRBY': {
                         if (args.length < 3) throw new Error('HINCRBY requires key, field, and increment');
                         const key = args[0]; const field = args[1]; const inc = parseInt(args[2], 10);
-                        assertTypeOrEmpty(key, 'hash');
+                        ensureStructure(key, 'hash');
                         if (Number.isNaN(inc)) throw new Error('HINCRBY requires an integer increment');
                         if (!redisStore.hashes[key]) redisStore.hashes[key] = {};
                         const cur = redisStore.hashes[key][field] !== undefined ? parseInt(redisStore.hashes[key][field], 10) : 0;
@@ -1018,7 +1017,7 @@
                     case 'HINCRBYFLOAT': {
                         if (args.length < 3) throw new Error('HINCRBYFLOAT requires key, field, and increment');
                         const key = args[0]; const field = args[1]; const inc = parseFloat(args[2]);
-                        assertTypeOrEmpty(key, 'hash');
+                        ensureStructure(key, 'hash');
                         if (Number.isNaN(inc)) throw new Error('HINCRBYFLOAT requires a numeric increment');
                         if (!redisStore.hashes[key]) redisStore.hashes[key] = {};
                         const cur = redisStore.hashes[key][field] !== undefined ? parseFloat(redisStore.hashes[key][field]) : 0;
@@ -1030,7 +1029,7 @@
                     case 'ZADD': {
                         if (args.length < 3) throw new Error('ZADD requires key, score, and member');
                         const key = args[0]; const rest = args.slice(1);
-                        assertTypeOrEmpty(key, 'zset');
+                        ensureStructure(key, 'zset');
                         if (rest.length % 2 !== 0) throw new Error('ZADD requires score member pairs');
                         if (!redisStore.zsets[key]) redisStore.zsets[key] = [];
                         const map = new Map(redisStore.zsets[key].map(it => [it.member, it]));
@@ -1045,7 +1044,7 @@
                     }
                     case 'ZRANGE': {
                         if (args.length < 3) throw new Error('ZRANGE requires key, start, and stop');
-                        const key = args[0]; assertTypeOrEmpty(key, 'zset');
+                        const key = args[0];
                         const start = parseInt(args[1], 10); const stopRaw = parseInt(args[2], 10);
                         if (Number.isNaN(start) || Number.isNaN(stopRaw)) throw new Error('ZRANGE requires numeric start and stop');
                         const z = redisStore.zsets[key] || [];
@@ -1062,7 +1061,7 @@
                     }
                     case 'ZRANGEBYSCORE': {
                         if (args.length < 3) throw new Error('ZRANGEBYSCORE requires key, min, and max');
-                        const key = args[0]; assertTypeOrEmpty(key, 'zset');
+                        const key = args[0];
                         const minArg = args[1]; const maxArg = args[2]; const withScores = (args[3] || '').toUpperCase() === 'WITHSCORES';
                         const z = redisStore.zsets[key] || [];
                         const parseB = v => (v === '-inf' ? -Infinity : (v === '+inf' || v === 'inf') ? Infinity : parseFloat(v));
@@ -1074,7 +1073,7 @@
                     }
                     case 'ZREM': {
                         if (args.length < 2) throw new Error('ZREM requires key and member');
-                        const key = args[0]; assertTypeOrEmpty(key, 'zset');
+                        const key = args[0];
                         const members = new Set(args.slice(1)); const z = redisStore.zsets[key];
                         if (!z) { result = '(integer) 0'; break; }
                         let removed = 0;
@@ -1083,7 +1082,7 @@
                         result = `(integer) ${removed}`; if (removed) renderZsets(); break;
                     }
                     case 'ZCARD': {
-                        const key = args[0]; assertTypeOrEmpty(key, 'zset');
+                        const key = args[0];
                         const z = redisStore.zsets[key];
                         result = `(integer) ${z ? z.length : 0}`; break;
                     }
@@ -1126,8 +1125,8 @@
                     case 'KEYS': {
                         if (args.length < 1) throw new Error('KEYS requires pattern');
                         const pattern = args[0];
-                        const escaped = pattern.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
-                        const regexPattern = '^' + escaped.replace(/\\*/g, '.*').replace(/\\?/g, '.') + '$';
+                        const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const regexPattern = '^' + escaped.replace(/\\\*/g, '.*').replace(/\\\?/g, '.') + '$';
                         const regex = new RegExp(regexPattern);
                         const keys = getAllKeys().filter(k => regex.test(k)).sort();
                         result = formatIndexed(keys.map(k => `"${k}"`)); break;
@@ -1143,8 +1142,8 @@
                             else if (opt === 'COUNT') { if (++i >= args.length) throw new Error('COUNT requires a number'); count = parseInt(args[i], 10); if (Number.isNaN(count) || count < 1) count = 10; }
                             else { throw new Error('Syntax error'); }
                         }
-                        const escaped = match.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
-                        const regexPattern = '^' + escaped.replace(/\\*/g, '.*').replace(/\\?/g, '.') + '$';
+                        const escaped = match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const regexPattern = '^' + escaped.replace(/\\\*/g, '.*').replace(/\\\?/g, '.') + '$';
                         const regex = new RegExp(regexPattern);
                         const all = getAllKeys().filter(k => regex.test(k)).sort();
                         const slice = all.slice(idx, idx + count);
@@ -1232,8 +1231,8 @@
                 addOutput(`redis> ${input}`, 'text-green-400');
                 if (Array.isArray(result)) {
                     result.forEach(line => addOutput(line, 'text-gray-300'));
-                } else if (typeof result === 'string' && result.includes('\\n')) {
-                    result.split('\\n').forEach(line => addOutput(line, 'text-gray-300'));
+                } else if (typeof result === 'string' && result.includes('\n')) {
+                    result.split('\n').forEach(line => addOutput(line, 'text-gray-300'));
                 } else if (result !== undefined && result !== null && result !== '') {
                     addOutput(result, 'text-gray-300');
                 }
@@ -1545,10 +1544,10 @@
                 }
             } else if (e.key === 'Tab') {
                 const val = inputEl.value;
-                const firstToken = val.trim().split(/\\s+/)[0].toUpperCase();
+                const firstToken = val.trim().split(/\s+/)[0].toUpperCase();
                 const matches = Object.keys(COMMAND_SPECS).filter(c => c.startsWith(firstToken));
                 if (firstToken.length && matches.length === 1) {
-                    const rest = val.replace(/^\\S*/, '').trim();
+                    const rest = val.replace(/^\S*/, '').trim();
                     inputEl.value = matches[0] + (rest ? ' ' + rest : ' ');
                 }
                 e.preventDefault();
