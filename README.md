@@ -1,7 +1,8 @@
-Summary of Improvements 
+##Summary of Improvements 
+
 The patched version introduces major functional, usability, and code quality upgrades. Key highlights include state persistence (so you don't lose your work), a fully functional and configurable persistence layer (AOF/RDB), and a vastly improved terminal with command history and autocomplete.
 
-🚀 Major Feature Enhancements
+*🚀 Major Feature Enhancements*
 State Persistence: The entire Redis store (all data types) and persistence settings (AOF/RDB) are now saved to localStorage. Your data and settings will persist even after refreshing the page.
 
 Configurable RDB Snapshots: The RDB (Redis Database) snapshot logic is no longer random.
