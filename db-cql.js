@@ -1,4 +1,3 @@
-// /src/db-cql.js
 // Cassandra simulator: keyspaces/tables, TTL, SELECT with PK/IN, secondary indexes, LIMIT, ALLOW FILTERING
 let ctx;
 export function init(context){ ctx = context; }
@@ -181,3 +180,4 @@ export function execute(line){
     throw new Error('Unsupported CQL. Try HELP.');
   }catch(err){ ctx.print('err','(error) '+err.message); ctx.recordOp('cassandra'); }
 }
+
