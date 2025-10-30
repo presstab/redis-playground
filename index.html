@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Multi-DB Playground — Redis • MongoDB • Cassandra (V3.0)</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="wrap" id="app">
+    <header>
+      <div class="brand" aria-label="Playground header">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>Multi-DB Playground — Redis • MongoDB • Cassandra</h1>
+          <div class="hint">
+            Single-file modules, localStorage-backed. Shortcuts:
+            <span class="kbd">Ctrl+1</span>/<span class="kbd">Ctrl+2</span>/<span class="kbd">Ctrl+3</span> switch DB •
+            <span class="kbd">Esc</span> focus terminal
+          </div>
+        </div>
+      </div>
+      <nav class="tabs" role="tablist" aria-label="Database selector">
+        <button class="tab" role="tab" id="tab-redis" aria-selected="true"  data-db="redis">Redis</button>
+        <button class="tab" role="tab" id="tab-mongo" aria-selected="false" data-db="mongo">MongoDB</button>
+        <button class="tab" role="tab" id="tab-cassandra" aria-selected="false" data-db="cassandra">Cassandra</button>
+      </nav>
+    </header>
+
+    <div class="grid">
+      <!-- LEFT: Terminal & Quick Start -->
+      <section class="panel section col">
+        <div class="toolbar" role="group" aria-label="Controls">
+          <div class="seg" aria-label="Persistence toggles" id="redisControls">
+            <button id="aofToggle" aria-pressed="false" title="Toggle AOF log (global)">AOF</button>
+            <button id="rdbToggle" aria-pressed="false" title="Toggle Redis RDB snapshots">RDB</button>
+            <label class="badge" title="Snapshot after N writes (Redis)">
+              <span class="i orange" aria-hidden="true"></span>
+              <span>RDB threshold</span>
+              <input id="rdbThreshold" type="number" min="1" value="10" class="num sm" />
+            </label>
+          </div>
+
+          <label class="badge" title="Operations/sec (10s window)">
+            <span class="i blue"></span><span>ops/sec:</span>
+            <strong id="opsMeter">0.0</strong>
+          </label>
+          <span class="badge" title="Live count for active DB"><span class="i green"></span><span id="liveCount">0</span></span>
+          <span class="badge" id="quotaBadge" title="Approx storage footprint">
+            <span class="i cyan"></span>Storage
+            <span id="storageText" class="mini">0 KB</span>
+          </span>
+
+          <span class="sp"></span>
+
+          <!-- Consolidated menu -->
+          <div class="menu">
+            <button class="btn small" id="dataMenuBtn" aria-haspopup="true" aria-expanded="false">Data ▾</button>
+            <div class="menu-pop" id="dataMenu" role="menu" aria-label="Data menu">
+              <div class="menu-group">
+                <div class="menu-title">Seed ▾</div>
+                <div class="submenu">
+                  <button data-seed="redis">Redis: list:groceries</button>
+                  <button data-seed="mongo">Mongo: school.students</button>
+                  <button data-seed="cassandra">Cassandra: demo.users</button>
+                </div>
+              </div>
+              <hr />
+              <button id="exportAllBtn">Export All</button>
+              <label for="importAllFile" class="filelike">Import All</label>
+              <input id="importAllFile" type="file" accept="application/json" />
+              <hr />
+              <button id="exportDbBtn">Export Active DB</button>
+              <label for="importDbFile" class="filelike">Import into Active DB</label>
+              <input id="importDbFile" type="file" accept="application/json" />
+              <hr />
+              <button id="openCrudGuide">Open CRUD Guide</button>
+              <hr />
+              <button id="hardResetBtn" class="danger">Hard Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div class="col terminal" aria-label="Terminal">
+            <div id="output" class="out" aria-live="polite" aria-label="Command output">
+              <div class="line muted">redis&gt; Ready. Type <span class="pill">HELP</span> for supported commands. Type <span class="pill">CLEAR</span> to clear terminal.</div>
+            </div>
+            <div class="inp">
+              <input id="cmd" list="suggest" autocomplete="off" placeholder="redis&gt;" aria-label="Command input" />
+              <button id="run" class="btn" title="Execute">Run</button>
+            </div>
+            <datalist id="suggest"></datalist>
+            <div class="hint" style="margin-top:6px">History: ↑/↓ • Autocomplete: Tab • CLEAR clears terminal • HELP [COMMAND] for usage</div>
+          </div>
+          <div class="col">
+            <details open>
+              <summary>Quick Start (copy/paste into terminal to smoke test)</summary>
+              <div style="margin-top:8px"></div>
+              <div class="vis">
+                <strong>Redis (≥10 lines)</strong>
+                <pre id="qs-redis" class="list" aria-label="Redis quick start">
+SET course "databases"
+GET course
+LPUSH list:groceries milk eggs bread
+LRANGE list:groceries 0 -1
+SADD set:tags redis nosql fun
+SCARD set:tags
+SISMEMBER set:tags redis
+ZADD leaderboard 1500 Alice 2300 Bob 1800 Charlie 2100 Diana
+ZRANGE leaderboard 0 -1 WITHSCORES
+PUBLISH news "hello world"
+SUBSCRIBE news
+                </pre>
+              </div>
+              <div class="vis" style="margin-top:8px">
+                <strong>MongoDB (≥5 lines)</strong>
+                <pre id="qs-mongo" class="list" aria-label="Mongo quick start">
+use school
+db.students.insertMany([{"name":"Sam","grade":3,"expiresAt": 32503680000000},{"name":"Ada","grade":4,"skills":["db","js"]}])
+db.students.find({"$or":[{"grade":{"$gte":4}},{"name":{"$in":["Sam"]}}]},{"name":1,"grade":1}).limit(5)
+db.students.aggregate([{"$match":{"grade":{"$gte":3}}},{"$group":{"_id":"$grade","total":{"$sum":1},"avgGrade":{"$avg":"$grade"},"names":{"$push":"$name"}}}]).limit(10)
+db.students.updateOne({"name":"Sam"},{"$inc":{"grade":1},"$push":{"skills":"redis"}})
+                </pre>
+              </div>
+              <div class="vis" style="margin-top:8px">
+                <strong>Cassandra (≥5 lines)</strong>
+                <pre id="qs-cql" class="list" aria-label="Cassandra quick start">
+CREATE KEYSPACE demo WITH replication = {"class":"SimpleStrategy","replication_factor":1};
+USE demo;
+CREATE TABLE users (id int, name text, created timestamp, PRIMARY KEY (id));
+CREATE INDEX ON users (name);
+INSERT INTO users (id,name,created) VALUES (1,'Eve',1690000000000) USING TTL 3;
+SELECT * FROM users LIMIT 5;
+SELECT * FROM users WHERE name = 'Eve';
+                </pre>
+              </div>
+              <div class="hint" style="margin-top:6px">Tip: Click any block to copy; then paste into terminal.</div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: Side panels (status + visualizer) -->
+      <aside class="right">
+        <section class="panel section">
+          <h3 class="side-title">Persistence & Metrics</h3>
+          <div class="flex">
+            <span class="badge" title="AOF status"><span id="aofDot" class="i"></span>AOF <span id="aofStatus" class="mini">off</span></span>
+            <span class="badge" id="rdbBadge" title="Redis snapshots"><span id="rdbDot" class="i"></span>RDB <span id="rdbStatus" class="mini">off</span></span>
+            <span class="badge" title="AOF cap (per DB)">
+              <span class="i cyan"></span>AOF cap
+              <input id="aofCapInput" type="number" min="50" value="800" class="num" />
+            </span>
+            <span class="badge" id="snapCapWrap" title="Snapshot cap (Redis only)">
+              <span class="i orange"></span>Snap cap
+              <input id="snapCapInput" type="number" min="1" value="8" class="num sm" />
+            </span>
+          </div>
+          <div class="meter" style="margin-top:8px"><div class="bar" id="opsBar"></div></div>
+          <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <div class="mini">AOF Log — active DB</div>
+              <div id="aofLog" class="aof" aria-label="Append-only log"></div>
+            </div>
+            <div>
+              <div class="mini">Redis Snapshots (simulated)</div>
+              <div id="snapshots" class="snapshot" aria-label="RDB snapshots"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel section">
+          <h3 class="side-title">Active DB Visualizer</h3>
+          <div id="viz" class="vis" aria-live="polite"></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <!-- CRUD Guide Modal -->
+  <div class="modal" id="crudModal" role="dialog" aria-modal="true" aria-labelledby="crudTitle">
+    <div class="card">
+      <div class="hd">
+        <strong id="crudTitle">CRUD Guide</strong>
+        <button class="btn small" id="crudClose">Close</button>
+      </div>
+      <div class="bd">
+        <div class="chips" role="tablist">
+          <button class="chip" data-tab="g-redis" aria-selected="true">Redis</button>
+          <button class="chip" data-tab="g-mongo" aria-selected="false">MongoDB</button>
+          <button class="chip" data-tab="g-cassandra" aria-selected="false">Cassandra</button>
+        </div>
+        <div style="height:8px"></div>
+        <div id="g-redis" class="code">
+SET user:1 "Ada"
+GET user:1
+HSET profile:1 name "Ada" lang "EN"
+HGETALL profile:1
+LPUSH queue jobs:1 jobs:2
+LRANGE queue 0 -1
+SADD tags redis nosql
+SMEMBERS tags
+ZADD leaderboard 100 "Ada" 150 "Bob"
+ZRANGE leaderboard 0 -1 WITHSCORES
+PUBLISH updates "hello"
+SUBSCRIBE updates
+        </div>
+        <div id="g-mongo" class="code" style="display:none">
+use app
+db.items.insertOne({"name":"Widget","price":12.5,"stock":10})
+db.items.find({"$and":[{"price":{"$gte":10}},{"stock":{"$gt":0}}]},{"name":1,"price":1}).limit(3)
+db.items.aggregate([{"$match":{"stock":{"$gt":0}}},{"$group":{"_id":"$price","count":{"$sum":1},"avg":{"$avg":"$price"},"items":{"$push":"$name"}}}]).limit(5)
+db.items.updateOne({"name":"Widget"},{"$inc":{"stock":5},"$rename":{"price":"unit_price"}})
+db.items.find({"unit_price":{"$lte":20}},{"_id":0,"name":1,"unit_price":1})
+        </div>
+        <div id="g-cassandra" class="code" style="display:none">
+CREATE KEYSPACE demo WITH replication = {"class":"SimpleStrategy","replication_factor":1};
+USE demo;
+CREATE TABLE products (id int, name text, created timestamp, PRIMARY KEY (id));
+CREATE INDEX ON products (name);
+INSERT INTO products (id,name,created) VALUES (1,'Widget',1690000000000);
+SELECT name FROM products WHERE id IN (1,2);
+-- Indexed non-PK query:
+SELECT * FROM products WHERE name = 'Widget';
+-- Table scan preview:
+SELECT * FROM products LIMIT 5;
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px">
+          <button class="btn small" id="copyGuide">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
