@@ -1,4 +1,3 @@
-// /src/db-mongo.js
 // MongoDB simulator module: parser, matcher, projection, updates, aggregate(), index hint
 let ctx;
 export function init(context){ ctx = context; }
@@ -241,3 +240,4 @@ export function execute(line){
   ctx.recordOp('mongo');
 }
 let _idCounter = 1000;
+
