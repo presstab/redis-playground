@@ -1,4 +1,3 @@
-// /src/db-redis.js
 // Redis simulator module (command map, tokenization, sorted sets, sets, hashes, pub/sub)
 let ctx;
 export function init(context){ ctx = context; setupPubSub(); }
@@ -170,3 +169,4 @@ export function execute(line){
   }catch(err){ ctx.print('err','(error) '+err.message); }
   ctx.recordOp('redis');
 }
+
