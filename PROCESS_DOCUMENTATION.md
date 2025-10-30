@@ -1,6 +1,6 @@
 This document logs the development process of the Multi-DB Playground. AI was used as a tool in the creation of this project, specifically ChatGPT 5 Pro. It assisted with refactoring, feature implementation, and code review. The following log details the prompts used and the results generated at each major version.
 
-#### PROMPT 1
+## Version 1.0: Initial Build (Prompt)
 You are given a single-file browser-based Redis playground (`index.html`) as reference only.
 Do not ask questions, do not propose a plan, and do not create a PR.
 Output a single, fully working `index.html` that I can paste into my repo and open locally or on GitHub Pages.
@@ -100,7 +100,7 @@ Now produce the file.
 
 ***Results- See hash: eb306a0e00c3495f60eb2229eb6f0ff6e6b9bb5e***
 
-#### PROMPT 2
+## Version 2: Feature Expansion (Prompt)
 Follow-up instruction for the SAME chat / session (no new uploads). You already produced the last working file as `index.html` (named `index(1).html` in the transcript). **Use that exact latest file as the current baseline.** Do NOT ask me to re-upload it.
 
 Your task now is to output a **single, fully upgraded `index.html`** implementing the backlog below PLUS the extra review fixes. Keep the project single-file, zero network, zero eval, and localStorage-backed. Preserve the existing look & feel and keyboard shortcuts.
@@ -177,7 +177,7 @@ Include a short HTML comment changelog “V2.1” at the top. No explanation out
 
 ***Results- See hash: ad720462d3817ac79e9ca7fec61373074c8a036c***
 
-#### PROMPT 3
+## Version 3: Modular Architecture (Prompt)
 Goal: Deliver **V3.0** by (1) splitting the code into clean modules/files and (2) implementing the items below. Keep behavior identical unless specified. No external networks/CDNs/eval. Keep localStorage schema and existing UX look.
 
 These are suggestions on ways to implement things; however, **if you know of a better way that works even better and achieves the same thing then let’s go with that.**
