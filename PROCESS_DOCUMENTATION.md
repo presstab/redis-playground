@@ -98,7 +98,8 @@ If you reuse ideas, make them cleaner and more modular.
 
 Now produce the file.
 
-***Results- See hash: eb306a0e00c3495f60eb2229eb6f0ff6e6b9bb5e***
+***Results — see tag: v1.0-eb306a0 (commit eb306a0e00c3495f60eb2229eb6f0ff6e6b9bb5e)***
+
 
 ## Version 2: Feature Expansion (Prompt)
 Follow-up instruction for the SAME chat / session (no new uploads). You already produced the last working file as `index.html` (named `index(1).html` in the transcript). **Use that exact latest file as the current baseline.** Do NOT ask me to re-upload it.
@@ -175,7 +176,7 @@ Include a short HTML comment changelog “V2.1” at the top. No explanation out
 - Include a brief “Changelog (V2.1)” comment summarizing the above.
 - No explanation outside the code block. Do not truncate.
 
-***Results- See hash: ad720462d3817ac79e9ca7fec61373074c8a036c***
+***Results — see tag: v2.1-ad72046 (commit ad720462d3817ac79e9ca7fec61373074c8a036c)***
 
 ## Version 3: Modular Architecture (Prompt)
 Goal: Deliver **V3.0** by (1) splitting the code into clean modules/files and (2) implementing the items below. Keep behavior identical unless specified. No external networks/CDNs/eval. Keep localStorage schema and existing UX look.
@@ -272,4 +273,5 @@ Return **six** fenced code blocks in this exact order and with these labels:
 
 Each file must be complete and runnable together as `/src/` with relative module imports. No extra commentary outside the code blocks. Do not truncate or elide with “…”. If you made any improvements outside this scope please explain them. This will be the last update to this project so we have to make it count. Remember as long as you are improving upon and not taking away you have my full support. (e.g if you think a different file structure would be better, do it. Just let me know what and why.
 
-***Results- See hash: 7a80933eed2b43b2008afc2958691ce79a075be5***
+***Results — see tag: v3.0-7a80933 (commit 7a80933eed2b43b2008afc2958691ce79a075be5)***
+
