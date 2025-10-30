@@ -1,35 +1,43 @@
-# Redis Data Structure Playground
+# Multi-DB Playground — Redis • MongoDB • Cassandra
 
-An interactive, single-file web application for visualizing Redis data structures. Execute Redis commands directly in your browser and see how they manipulate Strings, Lists, Hashes, Sets, and Sorted Sets in real-time. This tool is designed as an educational playground for learning and experimenting with Redis.
+> An interactive, browser-based simulator for learning Redis, MongoDB, and Cassandra commands.
 
-## Features
+**Live Version:** [**https://baddiesdaddy23.github.io/redis-playground/**](https://baddiesdaddy23.github.io/redis-playground/)
 
-*   **Interactive Terminal:** Execute a wide range of Redis commands with history and autocomplete.
-*   **Live Visualizations:** Watch data structures for Strings, Lists, Sets, Hashes, and Sorted Sets update instantly.
-*   **Persistence Simulation:** Toggle and observe simulated RDB snapshots and AOF (Append-Only File) logging.
-*   **Resource Monitoring:** View simulated memory usage and operations-per-second metrics.
-*   **Built-in Reference:** Includes quick scenarios to populate data and a comprehensive command reference.
-*   **Zero Installation:** Runs entirely in the browser. All state is saved to `localStorage`.
+## 🚀 Running Locally
 
-## How to Use
+Because this project uses JavaScript Modules, you cannot run it by simply opening the `index.html` file from your local file system. Browsers block modules from loading this way for security reasons (CORS policy).
 
-Simply download `index.html` and open it in any modern web browser. No server or installation is required.
+You **must** serve the files from a local web server or **use github pages**. Here are a few simple ways to do this:
 
-## Supported Commands
+### Option 1: Using VS Code + Live Server (Easiest)
+1.  If you use Visual Studio Code, install the **[Live Server](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer)** extension.
+2.  Right-click on `index.html` in the file explorer.
+3.  Select **"Open with Live Server"**.
 
-The playground supports a large subset of common Redis commands for the following data types:
+### Option 2: Using Python
+If you have Python installed, you can use its built-in web server. Open your terminal in the project's root directory (the one containing `index.html`) and run:
 
-*   **Strings:** `SET`, `GET`, `MSET`, `MGET`, `DEL`
-*   **Lists:** `LPUSH`, `RPUSH`, `LPOP`, `RPOP`, `LRANGE`
-*   **Sets:** `SADD`, `SREM`, `SMEMBERS`, `SISMEMBER`, `SINTER`
-*   **Hashes:** `HSET`, `HGET`, `HGETALL`, `HDEL`, `HKEYS`
-*   **Sorted Sets:** `ZADD`, `ZREM`, `ZRANGE`, `ZCARD`
-*   **Keys:** `EXPIRE`, `TTL`, `RENAME`, `TYPE`, `EXISTS`, `KEYS`, `SCAN`
+```bash
+# For Python 3.x
+python -m http.server
+````
 
-Type `HELP` in the terminal for a full list.
+Then, open `http://localhost:8000` in your browser.
 
-## Tech Stack
+### Option 3: Using Node.js
 
-*   **HTML5**
-*   **Tailwind CSS** (via CDN)
-*   **Vanilla JavaScript** (ES6+)
+If you have Node.js installed, you can use the popular `http-server` package.
+
+```bash
+# 1. Install it globally (you only need to do this once)
+npm install -g http-server
+
+# 2. Run it in your project directory
+http-server
+```
+
+Then, open the `http://localhost:8080` (or similar) URL it displays in your browser.
+
+```
+```
